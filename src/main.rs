@@ -4,12 +4,22 @@ extern crate git2;
 use std::os;
 use std::io::fs::PathExtensions;
 use getopts::{optflag,getopts};
-use git2::Repository;
+use git2::{Repository,Commit,Oid};
 
 fn is_git_repo(path: &Path) -> bool {
     let abs_path: Path = os::make_absolute(path).join(".git");
 
     return abs_path.exists() && abs_path.is_dir();
+}
+
+fn handle_commit(commits: &mut Vec<Oid>, commit: &Commit) {
+    let id: Oid = commit.id();
+    if !commits.contains(&id) {
+        commits.push(id);
+        for parent in commit.parents() {
+            handle_commit(commits, &parent);
+        }
+    }
 }
 
 fn main() {
@@ -38,27 +48,25 @@ fn main() {
     let path = Path::new(input.as_slice());
 
     if is_git_repo(&path) {
-        println!("git repo");
         let repo = match Repository::open(&path) {
             Ok(repo) => repo,
             Err(e) => fail!("failed to open `{}`: {}", path.display(), e),
         };
 
-        let mut branches_iter = match repo.branches(None) {
-            Ok(b) => { b }
-            Err(e) => {
-                fail!(e.to_string());
-                return;
-            }
+        let oid_commit = match repo.head() {
+            Ok(reference) => reference.target().unwrap(),
+            Err(e) => fail!("{}", e)
         };
 
-        for branch in branches_iter {
-            match branch {
-                (b, t) => {
-                    println!("{} {}", b.name(), t);
-                }
-            }
-        }
+        let commit = match repo.find_commit(oid_commit) {
+            Ok(commit) => commit,
+            Err(e) => fail!("{}", e)
+        };
+
+        let mut commits: Vec<Oid> = Vec::new();
+        handle_commit(&mut commits, &commit);
+
+        println!("Total count of commits: {}", commits.len());
     }
 }
 
