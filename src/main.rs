@@ -1,29 +1,11 @@
 extern crate getopts;
 extern crate git2;
 
-use std::os;
-use std::io::fs::PathExtensions;
+use std::os::{args};
 use getopts::{optflag,getopts};
-use git2::{Repository,Commit,Oid};
-
-fn is_git_repo(path: &Path) -> bool {
-    let abs_path: Path = os::make_absolute(path).join(".git");
-
-    return abs_path.exists() && abs_path.is_dir();
-}
-
-fn handle_commit(commits: &mut Vec<Oid>, commit: &Commit) {
-    let id: Oid = commit.id();
-    if !commits.contains(&id) {
-        commits.push(id);
-        for parent in commit.parents() {
-            handle_commit(commits, &parent);
-        }
-    }
-}
 
 fn main() {
-    let args: Vec<String> = os::args();
+    let args: Vec<String> = args();
     let program = args[0].clone();
 
     println!("{}", program);
@@ -47,26 +29,41 @@ fn main() {
 
     let path = Path::new(input.as_slice());
 
-    if is_git_repo(&path) {
-        let repo = match Repository::open(&path) {
+    gitstat::run(&path);
+}
+
+mod gitstat {
+    use git2::{Repository,Commit,Oid};
+
+    pub fn run(path: &Path) {
+        let repo = match Repository::open(path) {
             Ok(repo) => repo,
-            Err(e) => fail!("failed to open `{}`: {}", path.display(), e),
+            Err(e) => fail!("{}", e),
         };
 
-        let oid_commit = match repo.head() {
-            Ok(reference) => reference.target().unwrap(),
-            Err(e) => fail!("{}", e)
-        };
-
-        let commit = match repo.find_commit(oid_commit) {
-            Ok(commit) => commit,
-            Err(e) => fail!("{}", e)
+        let commit = match self::get_head_commit(&repo) {
+            Some(commit) => commit,
+            None => fail!("It seems like the repository is corrupt"),
         };
 
         let mut commits: Vec<Oid> = Vec::new();
-        handle_commit(&mut commits, &commit);
-
+        depth_first_search(&commit, &mut commits);
         println!("Total count of commits: {}", commits.len());
     }
-}
 
+    fn get_head_commit(repo: &Repository) -> Option<Commit> {
+        repo.head().ok()
+            .and_then(|h| h.target())
+            .and_then(|oid| repo.find_commit(oid).ok())
+    }
+
+    fn depth_first_search(commit: &Commit, visited: &mut Vec<Oid>) {
+        let id: Oid = commit.id();
+        if !visited.contains(&id) {
+            visited.push(id);
+            for parent in commit.parents() {
+                self::depth_first_search(&parent, visited);
+            }
+        }
+    }
+}
