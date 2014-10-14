@@ -4,6 +4,7 @@ extern crate git2;
 use std::os::{args};
 use getopts::{optflag,getopts};
 
+#[cfg(not(test))]
 fn main() {
     let args: Vec<String> = args();
     let program = args[0].clone();
@@ -29,17 +30,20 @@ fn main() {
 
     let path = Path::new(input.as_slice());
 
-    gitstat::run(&path);
+    let stat = gitstat::run(&path).ok().expect("All gonna bad");
+    println!("Total count of commits in '{}' is: {}", path.display(), stat.total);
+}
+
+struct Stat {
+    total: uint,
 }
 
 mod gitstat {
     use git2::{Repository,Commit,Oid};
+    use Stat;
 
-    pub fn run(path: &Path) {
-        let repo = match Repository::open(path) {
-            Ok(repo) => repo,
-            Err(e) => fail!("{}", e),
-        };
+    pub fn run(path: &Path) -> Result<Stat, &str> {
+        let repo = Repository::open(path).ok().expect("Not valid git repository");
 
         let commit = match self::get_head_commit(&repo) {
             Some(commit) => commit,
@@ -48,7 +52,8 @@ mod gitstat {
 
         let mut commits: Vec<Oid> = Vec::new();
         depth_first_search(&commit, &mut commits);
-        println!("Total count of commits: {}", commits.len());
+
+        Ok(Stat { total: commits.len() })
     }
 
     fn get_head_commit(repo: &Repository) -> Option<Commit> {
@@ -65,5 +70,38 @@ mod gitstat {
                 self::depth_first_search(&parent, visited);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::TempDir;
+    use git2::Repository;
+    use gitstat::run;
+
+    fn repo_init() -> (TempDir, Repository) {
+        let td = TempDir::new("test").unwrap();
+        let repo = Repository::init(td.path()).unwrap();
+        {
+            let mut config = repo.config().unwrap();
+            config.set_str("user.name", "name").unwrap();
+            config.set_str("user.email", "email").unwrap();
+            let mut index = repo.index().unwrap();
+            let id = index.write_tree().unwrap();
+
+            let tree = repo.find_tree(id).unwrap();
+            let sig = repo.signature().unwrap();
+            repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, []).unwrap();
+        }
+        (td, repo)
+    }
+
+    #[test]
+    fn smoke_run() {
+        let (_td, repo) = self::repo_init();
+        let path = repo.path();
+        let result = run(&path);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().total, 1);
     }
 }
