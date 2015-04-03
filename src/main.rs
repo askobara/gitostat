@@ -41,8 +41,11 @@ fn main() {
 
     let path = Path::new(input.as_slice());
 
-    let stat = gitstat::run(&path).ok().expect("All gonna bad");
-    println!("Total count of commits in '{}' is: {}", path.display(), stat.total);
+    // println!("Total count of commits in '{}' is: {}", path.display(), stat.total);
+    match gitstat::run(&path) {
+        Ok(()) => {}
+        Err(e) => println!("error: {}", e),
+    }
 }
 
 fn print_usage(program: &str, opts: Options) {
@@ -55,7 +58,7 @@ pub struct Stat {
 }
 
 mod gitstat {
-    use git2::{Repository,Commit,Oid,Signature};
+    use git2::{Repository,Commit,Oid,Signature,Time,Error};
     use std::collections::HashMap;
     use std::collections::hash_map::Entry;
     use std::sync::{Mutex, Arc};
@@ -66,20 +69,17 @@ mod gitstat {
     use std::cmp;
     use Stat;
 
-    pub fn run(path: &Path) -> Result<Stat, &str> {
-        let repo = Box::new(Repository::open(path).ok().expect("Not valid git repository"));
+    pub fn run(path: &Path) -> Result<(), Error> {
+        let repo = try!(Repository::open(path));
 
-        let commits: Box<Vec<Oid>> = self::depth_first_search(&repo);
-        let authors: Box<HashMap<String, usize>> = self::get_authors(path, &commits);
+        let authors: HashMap<String, usize> = try!(self::get_authors(&repo));
 
         // iterate over everything.
         for (name, count) in authors.iter() {
             println!("{}: {}", *name, *count);
         }
 
-        let total = commits.len();
-
-        Ok(Stat { total: total })
+        Ok(())
     }
 
     /// Helper method for gets HEAD commit of given git repository
@@ -89,50 +89,22 @@ mod gitstat {
             .and_then(|oid| repo.find_commit(oid).ok())
     }
 
-    fn depth_first_search(repo: &Box<Repository>) -> Box<Vec<Oid>> {
-        let mut visited: Box<Vec<Oid>> = Box::new(Vec::new());
-        let head_commit = match self::get_head_commit(repo) {
-            Some(commit) => commit,
-            None => panic!("It seems like the repository is corrupt"),
-        };
+    fn get_authors(repo: &Repository) -> Result<HashMap<String, usize>, Error> {
+        let mut heatmap = [[0u32; 24]; 7];
+        let mut authors: HashMap<String, usize> = HashMap::new();
+        let mut revwalk = try!(repo.revwalk());
 
-        let mut stack: Vec<Commit> = vec![head_commit];
-
-        loop {
-            let (id, commit) = match stack.pop() {
-                Some(commit) => (commit.id(), commit),
-                None => break,
-            };
-
-            if !visited.contains(&id) {
-                visited.push(id);
-                for parent in commit.parents() {
-                    stack.push(parent);
-                }
-            }
-        }
-
-        visited
-    }
-
-    fn get_authors(path: &Path, oids: &Box<Vec<Oid>>) -> Box<HashMap<String, usize>> {
-        let mut authors: Box<HashMap<String, usize>> = Box::new(HashMap::new());
-        let mut days = [[0u32; 24]; 7];
-        let repo = Repository::open(path).ok().expect("Not valid git repository");
+        revwalk.push_head();
         // let mutex = Mutex::new(repo);
 
         // mailmap::read_mailmap_file(path);
-        for oid in oids.iter() {
-            let commit = repo.find_commit(*oid).ok().expect("Commit not exists in repository");
-            let author: Signature = commit.author();
-            let uniq_name = format!("{} <{}>", author.name().unwrap(), author.email().unwrap());
+        for oid in revwalk {
+            let commit = try!(repo.find_commit(oid));
 
-            let time = commit.time();
-            let timestamp: NaiveDateTime = NaiveDateTime::from_timestamp(time.seconds(), 0);
-            let weekday: u32 = timestamp.weekday().num_days_from_monday();
-            let hour: u32 = timestamp.hour();
+            let uniq_name: String = get_uniq_name(&commit.author());
+            let (weekday, hour) = get_heatmat_coords(&commit.time());
 
-            days[weekday as usize][hour as usize] += 1;
+            heatmap[weekday as usize][hour as usize] += 1;
             // println!("{} {}", time.seconds(), time.offset_minutes());
 
             match authors.entry(uniq_name) {
@@ -146,24 +118,33 @@ mod gitstat {
 
         // find max
         let mut max: u32 = 0;
-        for i in 0..6 {
-            for j in 0..23 {
-                max = cmp::max(days[i as usize][j as usize], max);
+        for hours in heatmap.iter() {
+            for count in hours.iter() {
+                max = cmp::max(*count, max);
             }
         }
 
+        let arts = ['.', '▪', '◾', '◼', '⬛'];
 
-        // let arts = ['▫', '▪', '◽', '◾', '◻', '◼', '□', '■', '⬛'];
-        let arts = ['▪', '◾', '◼', '⬛'];
-
-        for hours in days.iter() {
+        for hours in heatmap.iter() {
             for count in hours.iter() {
                 print!("{:4}", arts[(count % arts.len() as u32) as usize]);
+                // print!("{:4}", count);
             }
             println!("");
         }
 
-        authors
+        Ok(authors)
+    }
+
+    fn get_uniq_name(author: &Signature) -> String {
+        format!("{} <{}>", author.name().unwrap(), author.email().unwrap())
+    }
+
+    fn get_heatmat_coords(time: &Time) -> (u32, u32) {
+        let timestamp: NaiveDateTime = NaiveDateTime::from_timestamp(time.seconds(), 0);
+
+        (timestamp.weekday().num_days_from_monday(), timestamp.hour())
     }
 
     /// Module `mailmap` which implement logic for parse .mailmap files
