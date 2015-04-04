@@ -5,71 +5,100 @@
 #![feature(str_char)]
 
 extern crate git2;
-extern crate chrono;
+// extern crate chrono;
 extern crate getopts;
 extern crate unicode;
+extern crate docopt;
+extern crate rustc_serialize;
+extern crate collections;
+extern crate core;
 
-use getopts::Options;
-use std::os;
 use std::path::Path;
+use docopt::Docopt;
+
+#[derive(RustcDecodable)]
+pub struct Args {
+    arg_path: String
+}
 
 #[cfg(not(test))]
 fn main() {
-    let args: Vec<String> = os::args();
-    let program = args[0].clone();
-
-    let mut opts = Options::new();
-    opts.optflag("h", "help", "print this help menu");
-
-    let matches = match opts.parse(args.tail()) {
-        Ok(m) => { m }
-        Err(f) => { panic!(f.to_string()) }
-    };
-
-    if matches.opt_present("h") {
-        print_usage(program.as_slice(), opts);
-        return;
-    }
-
-    let input = if !matches.free.is_empty() {
-        println!("count of opts: {}", matches.free.len());
-        matches.free[0].clone()
-    } else {
-        print_usage(program.as_slice(), opts);
-        return;
-    };
-
-    let path = Path::new(input.as_slice());
+    const USAGE: &'static str = "
+usage: gitstat [options] <path>
+Options:
+-h, --help show this message
+";
+    let args: Args = Docopt::new(USAGE)
+        .and_then(|d| d.decode())
+        .unwrap_or_else(|e| e.exit());
 
     // println!("Total count of commits in '{}' is: {}", path.display(), stat.total);
-    match gitstat::run(&path) {
+    match gitstat::run(&args) {
         Ok(()) => {}
         Err(e) => println!("error: {}", e),
     }
 }
 
-fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} [options]", program);
-    print!("{}", opts.usage(brief.as_slice()));
-}
-
-pub struct Stat {
-    total: usize,
-}
-
 mod gitstat {
-    use git2::{Repository,Commit,Oid,Signature,Time,Error};
+    use git2;
+    use git2::{Repository,Commit,Oid,Signature,Time,Tree,Object,ObjectType};
     use std::collections::HashMap;
     use std::collections::hash_map::Entry;
     use std::sync::{Mutex, Arc};
     use std::path::Path;
-    use chrono::datetime::DateTime;
-    use chrono::naive::datetime::NaiveDateTime;
-    use chrono::{Timelike, Datelike};
+    use collections::vec::IntoIter;
+    use core::iter::IntoIterator;
+    use std::ops::Add;
+    use Args;
+    // use chrono::datetime::DateTime;
+    // use chrono::naive::datetime::NaiveDateTime;
+    // use chrono::{Timelike, Datelike};
     use std::cmp;
-    use Stat;
 
-    pub fn run(path: &Path) -> Result<(), Error> {
+    struct Files {
+        files: Vec<String>
+    }
+
+    impl Files {
+
+        pub fn new(repo: &Repository, head: &Tree) -> Result<Files, git2::Error> {
+            let mut vec = Vec::new();
+
+            for entry in head.iter() {
+                let name: String = format!("{}", entry.name().unwrap());
+
+                match entry.kind() {
+                    Some(ObjectType::Tree) => {
+                        let object: Object = try!(entry.to_object(repo));
+                        let subfolder = try!(Files::new(repo, &object.as_tree().unwrap()));
+                        vec.push_all(&subfolder.files);
+                    },
+                    Some(ObjectType::Blob) => vec.push(name),
+                    _ => println!("{}", entry.kind().unwrap())
+                }
+            }
+
+            Ok(Files {
+                files: vec
+            })
+        }
+
+        pub fn len(&self) -> usize {
+            self.files.len()
+        }
+    }
+
+    impl IntoIterator for Files {
+        type Item = String;
+        type IntoIter = IntoIter<String>;
+
+        fn into_iter(self) -> IntoIter<String> {
+            self.files.into_iter()
+        }
+    }
+
+    pub fn run(args: &Args) -> Result<(), git2::Error> {
+        let path = Path::new(&args.arg_path);
         let repo = try!(Repository::open(path));
 
         let authors: HashMap<String, usize> = try!(self::get_authors(&repo));
@@ -89,12 +118,13 @@ mod gitstat {
             .and_then(|oid| repo.find_commit(oid).ok())
     }
 
-    fn get_authors(repo: &Repository) -> Result<HashMap<String, usize>, Error> {
+    fn get_authors(repo: &Repository) -> Result<HashMap<String, usize>, git2::Error> {
         let mut heatmap = [[0u32; 24]; 7];
         let mut authors: HashMap<String, usize> = HashMap::new();
         let mut revwalk = try!(repo.revwalk());
 
         revwalk.push_head();
+        revwalk.set_sorting(git2::SORT_TOPOLOGICAL);
         // let mutex = Mutex::new(repo);
 
         // mailmap::read_mailmap_file(path);
@@ -103,6 +133,13 @@ mod gitstat {
 
             let uniq_name: String = get_uniq_name(&commit.author());
             let (weekday, hour) = get_heatmat_coords(&commit.time());
+            let tree = try!(commit.tree());
+            let files = try!(Files::new(&repo, &tree));
+
+            // for item in files {
+            //     println!("{}", item);
+            // }
+            println!("{} {}", oid, files.len());
 
             heatmap[weekday as usize][hour as usize] += 1;
             // println!("{} {}", time.seconds(), time.offset_minutes());
@@ -142,9 +179,10 @@ mod gitstat {
     }
 
     fn get_heatmat_coords(time: &Time) -> (u32, u32) {
-        let timestamp: NaiveDateTime = NaiveDateTime::from_timestamp(time.seconds(), 0);
-
-        (timestamp.weekday().num_days_from_monday(), timestamp.hour())
+        // let timestamp: NaiveDateTime = NaiveDateTime::from_timestamp(time.seconds(), 0);
+        //
+        // (timestamp.weekday().num_days_from_monday(), timestamp.hour())
+        (0, 0)
     }
 
     /// Module `mailmap` which implement logic for parse .mailmap files
@@ -207,9 +245,9 @@ mod gitstat {
                 None => -1
             };
 
-            if left == -1 || right == -1 {
-                return None;
-            }
+            // if left == -1 || right == -1 {
+            //     return None;
+            // }
 
             if left > right {
                 return None;

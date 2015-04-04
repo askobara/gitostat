@@ -4,9 +4,9 @@ name = "gitstat"
 version = "0.0.1"
 authors = ["Arthur Skobara <skobara.arthur@gmail.com>"]
 
-[dependencies.git2]
-git = "https://github.com/alexcrichton/git2-rs"
-
 [dependencies]
-getopts = "0.2.4"
-chrono = "0.2"
+git2 = "*"
+getopts = "*"
+# chrono = "*"
+docopt = "*"
+rustc-serialize = "*"
