@@ -7,6 +7,6 @@ authors = ["Arthur Skobara <skobara.arthur@gmail.com>"]
 [dependencies]
 git2 = "*"
 getopts = "*"
-# chrono = "*"
+chrono = "*"
 docopt = "*"
 rustc-serialize = "*"

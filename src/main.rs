@@ -5,7 +5,7 @@
 #![feature(str_char)]
 
 extern crate git2;
-// extern crate chrono;
+extern crate chrono;
 extern crate getopts;
 extern crate unicode;
 extern crate docopt;
@@ -50,9 +50,9 @@ mod gitstat {
     use core::iter::IntoIterator;
     use std::ops::Add;
     use Args;
-    // use chrono::datetime::DateTime;
-    // use chrono::naive::datetime::NaiveDateTime;
-    // use chrono::{Timelike, Datelike};
+    use chrono::datetime::DateTime;
+    use chrono::naive::datetime::NaiveDateTime;
+    use chrono::{Timelike, Datelike};
     use std::cmp;
 
     struct Files {
@@ -179,10 +179,9 @@ mod gitstat {
     }
 
     fn get_heatmat_coords(time: &Time) -> (u32, u32) {
-        // let timestamp: NaiveDateTime = NaiveDateTime::from_timestamp(time.seconds(), 0);
-        //
-        // (timestamp.weekday().num_days_from_monday(), timestamp.hour())
-        (0, 0)
+        let timestamp: NaiveDateTime = NaiveDateTime::from_timestamp(time.seconds(), 0);
+
+        (timestamp.weekday().num_days_from_monday(), timestamp.hour())
     }
 
     /// Module `mailmap` which implement logic for parse .mailmap files
