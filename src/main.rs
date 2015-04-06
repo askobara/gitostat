@@ -74,7 +74,7 @@ mod gitstat {
                         vec.push_all(&subfolder.files);
                     },
                     Some(ObjectType::Blob) => vec.push(name),
-                    _ => println!("{}", entry.kind().unwrap())
+                    _ => {}
                 }
             }
 
@@ -119,29 +119,26 @@ mod gitstat {
     }
 
     fn get_authors(repo: &Repository) -> Result<HashMap<String, usize>, git2::Error> {
-        let mut heatmap = [[0u32; 24]; 7];
+        let mut heatmap = [0; 24*7];
         let mut authors: HashMap<String, usize> = HashMap::new();
         let mut revwalk = try!(repo.revwalk());
+        // let mut files_number = Vec::new();
 
         revwalk.push_head();
         revwalk.set_sorting(git2::SORT_TOPOLOGICAL);
         // let mutex = Mutex::new(repo);
 
-        // mailmap::read_mailmap_file(path);
         for oid in revwalk {
             let commit = try!(repo.find_commit(oid));
 
             let uniq_name: String = get_uniq_name(&commit.author());
             let (weekday, hour) = get_heatmat_coords(&commit.time());
             let tree = try!(commit.tree());
-            let files = try!(Files::new(&repo, &tree));
+            // let files = try!(Files::new(&repo, &tree));
 
-            // for item in files {
-            //     println!("{}", item);
-            // }
-            println!("{} {}", oid, files.len());
+            // files_number.push(files.len());
 
-            heatmap[weekday as usize][hour as usize] += 1;
+            heatmap[(weekday * 24 + hour) as usize] += 1;
             // println!("{} {}", time.seconds(), time.offset_minutes());
 
             match authors.entry(uniq_name) {
@@ -155,20 +152,26 @@ mod gitstat {
 
         // find max
         let mut max: u32 = 0;
-        for hours in heatmap.iter() {
-            for count in hours.iter() {
-                max = cmp::max(*count, max);
-            }
+        for count in heatmap.iter() {
+            max = cmp::max(*count, max);
         }
 
         let arts = ['.', '▪', '◾', '◼', '⬛'];
 
-        for hours in heatmap.iter() {
-            for count in hours.iter() {
-                print!("{:4}", arts[(count % arts.len() as u32) as usize]);
-                // print!("{:4}", count);
+        print!(" ");
+        for i in 0..24 {
+            print!("{:3}", i);
+        }
+        println!("");
+        for i in 0..24*7 {
+            if i % 24 == 0 {
+                print!("{}: ", i / 24);
             }
-            println!("");
+            print!("{:3}", arts[(heatmap[i] as f32 / max as f32 * (arts.len() - 1) as f32) as usize]);
+            // print!("{:3}", heatmap[i]);
+            if (i + 1) % 24 == 0 {
+                println!("");
+            }
         }
 
         Ok(authors)
@@ -182,98 +185,6 @@ mod gitstat {
         let timestamp: NaiveDateTime = NaiveDateTime::from_timestamp(time.seconds(), 0);
 
         (timestamp.weekday().num_days_from_monday(), timestamp.hour())
-    }
-
-    /// Module `mailmap` which implement logic for parse .mailmap files
-    mod mailmap {
-
-        use std::env;
-        use std::fs::File;
-        use std::io::{BufReader, BufRead};
-        use std::string::String;
-        use std::path::Path;
-        use unicode::str::UnicodeStr;
-
-        pub fn read_mailmap_file(basedir: &Path) {
-            // get full path to .mailmap
-            let path = match env::current_dir() {
-                Ok(path) => path.join(".mailmap"),
-                Err(error) => panic!("{}", error),
-            };
-
-            // create BufReader instance for .mailmap file
-            let mut reader = match File::open(&path) {
-                Ok(file) => BufReader::new(file),
-                Err(error) => panic!("{}", error),
-            };
-
-            for line in reader.lines() {
-                match line {
-                    Ok(line) => self::read_mailmap_line(line.as_slice()),
-                    Err(x) => break
-                };
-            }
-        }
-
-        struct Author {
-            name: String,
-            email: String
-        }
-
-        struct MailmapLine {
-            new_author: Author,
-            old_author: Author
-        }
-
-        fn read_mailmap_line(line: &str) -> Option<MailmapLine> {
-            if line.len() > 0 && line.char_at(0) != '#' {
-                parse_mailmap_name_email(line);
-            }
-
-            None
-        }
-
-        fn parse_mailmap_name_email(line: &str) -> Option<Author> {
-            let left = match line.find('<') {
-                Some(i) => i,
-                None => -1
-            };
-
-            let right = match line.find('>') {
-                Some(i) => i,
-                None => -1
-            };
-
-            // if left == -1 || right == -1 {
-            //     return None;
-            // }
-
-            if left > right {
-                return None;
-            }
-
-            if left+1 == right {
-                return None;
-            }
-
-            Some(Author {
-                name: String::from_str(UnicodeStr::trim(&line[..left])),
-                email: String::from_str(UnicodeStr::trim(&line[left..right]))
-            })
-
-        }
-
-        #[test]
-        fn test_parse_name_email() {
-            assert!(self::parse_mailmap_name_email("name <email>").is_some());
-            assert!(self::parse_mailmap_name_email("name <>").is_none());
-            assert!(self::parse_mailmap_name_email(">").is_none());
-            assert!(self::parse_mailmap_name_email("<").is_none());
-            assert!(self::parse_mailmap_name_email("><").is_none());
-            assert!(self::parse_mailmap_name_email("").is_none());
-            assert!(self::parse_mailmap_name_email("<email>").is_some());
-        }
-
     }
 }
 
