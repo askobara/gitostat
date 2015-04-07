@@ -51,8 +51,10 @@ mod gitstat {
     use std::ops::Add;
     use Args;
     use chrono::datetime::DateTime;
-    use chrono::naive::datetime::NaiveDateTime;
-    use chrono::{Timelike, Datelike};
+    use chrono::offset::fixed::FixedOffset;
+    use chrono::offset::utc::UTC;
+    use chrono::offset::TimeZone;
+    use chrono::{Datelike, Timelike};
     use std::cmp;
 
     struct Files {
@@ -152,6 +154,7 @@ mod gitstat {
 
         // find max
         let mut max: u32 = 0;
+        // TODO: sort this
         for count in heatmap.iter() {
             max = cmp::max(*count, max);
         }
@@ -182,7 +185,8 @@ mod gitstat {
     }
 
     fn get_heatmat_coords(time: &Time) -> (u32, u32) {
-        let timestamp: NaiveDateTime = NaiveDateTime::from_timestamp(time.seconds(), 0);
+        let timestamp = UTC.timestamp(time.seconds(), 0)
+            .with_timezone(&FixedOffset::east(time.offset_minutes() * 60));
 
         (timestamp.weekday().num_days_from_monday(), timestamp.hour())
     }
