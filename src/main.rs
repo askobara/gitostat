@@ -50,12 +50,8 @@ mod gitstat {
     use core::iter::IntoIterator;
     use std::ops::Add;
     use Args;
-    use chrono::datetime::DateTime;
-    use chrono::offset::fixed::FixedOffset;
-    use chrono::offset::utc::UTC;
-    use chrono::offset::TimeZone;
-    use chrono::{Datelike, Timelike};
-    use std::cmp;
+    use chrono::*;
+    use std::{cmp, fmt};
 
     struct Files {
         files: Vec<String>
@@ -99,6 +95,57 @@ mod gitstat {
         }
     }
 
+    struct Heatmap {
+        vec: [u32; 24*7]
+    }
+
+    impl Heatmap {
+        pub fn new() -> Heatmap {
+            Heatmap { vec: [0u32; 24*7] }
+        }
+
+        pub fn append(&mut self, time: &Time) {
+
+            let timestamp = UTC.timestamp(time.seconds(), 0)
+                .with_timezone(&FixedOffset::east(time.offset_minutes() * 60));
+            let (weekday, hour) = (timestamp.weekday().num_days_from_monday(), timestamp.hour());
+
+            self.vec[(weekday * 24 + hour) as usize] += 1;
+        }
+    }
+
+    impl fmt::Display for Heatmap {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            // find max
+            let mut max: u32 = 0;
+            // TODO: sort this
+            for count in self.vec.iter() {
+                max = cmp::max(*count, max);
+            }
+
+            let arts = ['.', '▪', '◾', '◼', '⬛'];
+
+            write!(f, " ");
+            for i in 0..24 {
+                write!(f, "{:3}", i);
+            }
+            write!(f, "\n");
+
+            for i in 0..24*7 {
+                if i % 24 == 0 {
+                    write!(f, "{}: ", i / 24);
+                }
+                write!(f, "{:3}", arts[(self.vec[i] as f32 / max as f32 * (arts.len() - 1) as f32) as usize]);
+                // print!("{:3}", heatmap[i]);
+                if (i + 1) % 24 == 0 {
+                    write!(f, "\n");
+                }
+            }
+
+            Ok(())
+        }
+    }
+
     pub fn run(args: &Args) -> Result<(), git2::Error> {
         let path = Path::new(&args.arg_path);
         let repo = try!(Repository::open(path));
@@ -121,7 +168,7 @@ mod gitstat {
     }
 
     fn get_authors(repo: &Repository) -> Result<HashMap<String, usize>, git2::Error> {
-        let mut heatmap = [0; 24*7];
+        let mut heatmap = Heatmap::new();
         let mut authors: HashMap<String, usize> = HashMap::new();
         let mut revwalk = try!(repo.revwalk());
         // let mut files_number = Vec::new();
@@ -134,14 +181,12 @@ mod gitstat {
             let commit = try!(repo.find_commit(oid));
 
             let uniq_name: String = get_uniq_name(&commit.author());
-            let (weekday, hour) = get_heatmat_coords(&commit.time());
-            let tree = try!(commit.tree());
+            // let (weekday, hour) = get_heatmat_coords(&commit.time());
+            // let tree = try!(commit.tree());
             // let files = try!(Files::new(&repo, &tree));
 
             // files_number.push(files.len());
-
-            heatmap[(weekday * 24 + hour) as usize] += 1;
-            // println!("{} {}", time.seconds(), time.offset_minutes());
+            heatmap.append(&commit.time());
 
             match authors.entry(uniq_name) {
                 Entry::Vacant(entry) => entry.insert(1),
@@ -152,30 +197,7 @@ mod gitstat {
             };
         }
 
-        // find max
-        let mut max: u32 = 0;
-        // TODO: sort this
-        for count in heatmap.iter() {
-            max = cmp::max(*count, max);
-        }
-
-        let arts = ['.', '▪', '◾', '◼', '⬛'];
-
-        print!(" ");
-        for i in 0..24 {
-            print!("{:3}", i);
-        }
-        println!("");
-        for i in 0..24*7 {
-            if i % 24 == 0 {
-                print!("{}: ", i / 24);
-            }
-            print!("{:3}", arts[(heatmap[i] as f32 / max as f32 * (arts.len() - 1) as f32) as usize]);
-            // print!("{:3}", heatmap[i]);
-            if (i + 1) % 24 == 0 {
-                println!("");
-            }
-        }
+        println!("{}", heatmap);
 
         Ok(authors)
     }
@@ -184,12 +206,6 @@ mod gitstat {
         format!("{} <{}>", author.name().unwrap(), author.email().unwrap())
     }
 
-    fn get_heatmat_coords(time: &Time) -> (u32, u32) {
-        let timestamp = UTC.timestamp(time.seconds(), 0)
-            .with_timezone(&FixedOffset::east(time.offset_minutes() * 60));
-
-        (timestamp.weekday().num_days_from_monday(), timestamp.hour())
-    }
 }
 
 #[cfg(test)]
