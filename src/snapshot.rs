@@ -3,17 +3,17 @@ use std::path::{PathBuf,Path};
 use std::slice;
 use collections::vec::IntoIter;
 
-pub struct Files {
+pub struct Snapshot {
     files: Vec<PathBuf>
 }
 
-impl Files {
+impl Snapshot {
 
-    pub fn new(repo: &git2::Repository, head: &git2::Tree) -> Result<Files, git2::Error> {
-        Files::create(repo, head, "")
+    pub fn new(repo: &git2::Repository, head: &git2::Tree) -> Result<Snapshot, git2::Error> {
+        Snapshot::create(repo, head, "")
     }
 
-    fn create(repo: &git2::Repository, head: &git2::Tree, prefix: &str) -> Result<Files, git2::Error> {
+    fn create(repo: &git2::Repository, head: &git2::Tree, prefix: &str) -> Result<Snapshot, git2::Error> {
         let mut vec = Vec::with_capacity(64);
 
         for entry in head.iter() {
@@ -26,7 +26,7 @@ impl Files {
                         let object: git2::Object = try!(entry.to_object(repo));
 
                         if let (Some(subtree), Some(subpath)) = (object.as_tree(), path.to_str()) {
-                            let subfolder = try!(Files::create(repo, &subtree, subpath));
+                            let subfolder = try!(Snapshot::create(repo, &subtree, subpath));
                             vec.push_all(&subfolder.files);
                         }
                     },
@@ -38,7 +38,7 @@ impl Files {
             }
         }
 
-        Ok(Files {
+        Ok(Snapshot {
             files: vec
         })
     }
@@ -52,7 +52,7 @@ impl Files {
     }
 }
 
-impl IntoIterator for Files {
+impl IntoIterator for Snapshot {
     type Item = PathBuf;
     type IntoIter = IntoIter<PathBuf>;
 

@@ -15,7 +15,7 @@ extern crate core;
 
 use docopt::Docopt;
 
-mod files;
+mod snapshot;
 mod heatmap;
 
 #[derive(RustcDecodable)]
@@ -51,7 +51,7 @@ mod gitstat {
     use std::ffi;
     use Args;
 
-    use files::Files;
+    use snapshot::Snapshot;
     use heatmap::Heatmap;
 
     pub fn run(args: &Args) -> Result<(), git2::Error> {
@@ -79,7 +79,6 @@ mod gitstat {
         let mut heatmap = Heatmap::new();
         let mut authors: HashMap<String, usize> = HashMap::new();
         let mut revwalk = try!(repo.revwalk());
-        // let mut files_number = Vec::new();
 
         revwalk.push_head();
         revwalk.set_sorting(git2::SORT_TOPOLOGICAL);
@@ -95,7 +94,7 @@ mod gitstat {
 
             let tree = try!(commit.tree());
 
-            let files = try!(Files::new(&repo, &tree));
+            let files = try!(Snapshot::new(&repo, &tree));
 
             for path in files.iter() {
                 // println!("{}", path.display());
