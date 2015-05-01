@@ -48,6 +48,7 @@ mod gitstat {
     use std::sync::{Mutex, Arc};
     use std::path::Path;
     use core::iter::IntoIterator;
+    use std::ffi;
     use Args;
 
     use files::Files;
@@ -78,6 +79,7 @@ mod gitstat {
         let mut heatmap = Heatmap::new();
         let mut authors: HashMap<String, usize> = HashMap::new();
         let mut revwalk = try!(repo.revwalk());
+        // let mut files_number = Vec::new();
 
         revwalk.push_head();
         revwalk.set_sorting(git2::SORT_TOPOLOGICAL);
@@ -86,8 +88,9 @@ mod gitstat {
         let oids: Vec<git2::Oid> = revwalk.by_ref().collect();
         println!("total count: {}", oids.len());
 
-        for oid in oids {
-            let commit = try!(repo.find_commit(oid));
+        for oid in oids[..10].iter() {
+            let commit = try!(repo.find_commit(*oid));
+            let mut extensions: HashMap<ffi::OsString, usize> = HashMap::new();
             heatmap.append(&commit.time());
 
             let tree = try!(commit.tree());
@@ -95,9 +98,20 @@ mod gitstat {
             let files = try!(Files::new(&repo, &tree));
 
             for path in files.iter() {
-                println!("{}", path.display());
+                // println!("{}", path.display());
+
+                if let Some(ext) = path.extension() {
+                    match extensions.entry(ext.to_os_string()) {
+                        Entry::Vacant(entry) => entry.insert(1),
+                        Entry::Occupied(mut entry) => {
+                            *entry.get_mut() += 1;
+                            entry.into_mut()
+                        }
+                    };
+                }
             }
             println!("{} {}", oid, files.len());
+            println!("{:?}\n", extensions);
 
             let uniq_name: String = get_uniq_name(&commit.author());
 

@@ -20,7 +20,7 @@ impl Files {
             if let Some(name) = entry.name() {
                 let path = PathBuf::from(prefix).join(name);
 
-                println!("{} {}", entry.id(), path.to_str().unwrap());
+                // println!("{} {}", entry.id(), path.to_str().unwrap());
                 match entry.kind() {
                     Some(git2::ObjectType::Tree) => {
                         let object: git2::Object = try!(entry.to_object(repo));
