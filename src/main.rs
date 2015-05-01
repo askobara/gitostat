@@ -95,7 +95,7 @@ mod gitstat {
             let files = try!(Files::new(&repo, &tree));
 
             for path in files.iter() {
-                println!("{}", path.to_str().unwrap());
+                println!("{}", path.display());
             }
             println!("{} {}", oid, files.len());
 
