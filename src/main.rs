@@ -1,20 +1,22 @@
 #![feature(os)]
 #![feature(core)]
 #![feature(collections)]
-#![feature(unicode)]
+// #![feature(unicode)]
 #![feature(str_char)]
 
 extern crate git2;
 extern crate chrono;
 extern crate getopts;
-extern crate unicode;
+// extern crate unicode;
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate collections;
 extern crate core;
 
-use std::path::Path;
 use docopt::Docopt;
+
+mod files;
+mod heatmap;
 
 #[derive(RustcDecodable)]
 pub struct Args {
@@ -32,123 +34,28 @@ Options:
         .and_then(|d| d.decode())
         .unwrap_or_else(|e| e.exit());
 
-    // println!("Total count of commits in '{}' is: {}", path.display(), stat.total);
     match gitstat::run(&args) {
-        Ok(()) => {}
-        Err(e) => println!("error: {}", e),
+        Ok(()) => {},
+        Err(e) => println!("error: {}", e)
     }
 }
 
 mod gitstat {
+
     use git2;
-    use git2::{Repository,Commit,Oid,Signature,Time,Tree,Object,ObjectType};
     use std::collections::HashMap;
     use std::collections::hash_map::Entry;
     use std::sync::{Mutex, Arc};
     use std::path::Path;
-    use collections::vec::IntoIter;
     use core::iter::IntoIterator;
-    use std::ops::Add;
     use Args;
-    use chrono::*;
-    use std::{cmp, fmt};
 
-    struct Files {
-        files: Vec<String>
-    }
-
-    impl Files {
-
-        pub fn new(repo: &Repository, head: &Tree) -> Result<Files, git2::Error> {
-            let mut vec = Vec::new();
-
-            for entry in head.iter() {
-                let name: String = format!("{}", entry.name().unwrap());
-
-                match entry.kind() {
-                    Some(ObjectType::Tree) => {
-                        let object: Object = try!(entry.to_object(repo));
-                        let subfolder = try!(Files::new(repo, &object.as_tree().unwrap()));
-                        vec.push_all(&subfolder.files);
-                    },
-                    Some(ObjectType::Blob) => vec.push(name),
-                    _ => {}
-                }
-            }
-
-            Ok(Files {
-                files: vec
-            })
-        }
-
-        pub fn len(&self) -> usize {
-            self.files.len()
-        }
-    }
-
-    impl IntoIterator for Files {
-        type Item = String;
-        type IntoIter = IntoIter<String>;
-
-        fn into_iter(self) -> IntoIter<String> {
-            self.files.into_iter()
-        }
-    }
-
-    struct Heatmap {
-        vec: [u32; 24*7]
-    }
-
-    impl Heatmap {
-        pub fn new() -> Heatmap {
-            Heatmap { vec: [0u32; 24*7] }
-        }
-
-        pub fn append(&mut self, time: &Time) {
-
-            let timestamp = UTC.timestamp(time.seconds(), 0)
-                .with_timezone(&FixedOffset::east(time.offset_minutes() * 60));
-            let (weekday, hour) = (timestamp.weekday().num_days_from_monday(), timestamp.hour());
-
-            self.vec[(weekday * 24 + hour) as usize] += 1;
-        }
-    }
-
-    impl fmt::Display for Heatmap {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            // find max
-            let mut max: u32 = 0;
-            // TODO: sort this
-            for count in self.vec.iter() {
-                max = cmp::max(*count, max);
-            }
-
-            let arts = ['.', '▪', '◾', '◼', '⬛'];
-
-            write!(f, " ");
-            for i in 0..24 {
-                write!(f, "{:3}", i);
-            }
-            write!(f, "\n");
-
-            for i in 0..24*7 {
-                if i % 24 == 0 {
-                    write!(f, "{}: ", i / 24);
-                }
-                write!(f, "{:3}", arts[(self.vec[i] as f32 / max as f32 * (arts.len() - 1) as f32) as usize]);
-                // print!("{:3}", heatmap[i]);
-                if (i + 1) % 24 == 0 {
-                    write!(f, "\n");
-                }
-            }
-
-            Ok(())
-        }
-    }
+    use files::Files;
+    use heatmap::Heatmap;
 
     pub fn run(args: &Args) -> Result<(), git2::Error> {
         let path = Path::new(&args.arg_path);
-        let repo = try!(Repository::open(path));
+        let repo = try!(git2::Repository::open(path));
 
         let authors: HashMap<String, usize> = try!(self::get_authors(&repo));
 
@@ -161,32 +68,38 @@ mod gitstat {
     }
 
     /// Helper method for gets HEAD commit of given git repository
-    fn get_head_commit(repo: &Box<Repository>) -> Option<Commit> {
+    fn get_head_commit(repo: &Box<git2::Repository>) -> Option<git2::Commit> {
         repo.head().ok()
             .and_then(|h| h.target())
             .and_then(|oid| repo.find_commit(oid).ok())
     }
 
-    fn get_authors(repo: &Repository) -> Result<HashMap<String, usize>, git2::Error> {
+    fn get_authors(repo: &git2::Repository) -> Result<HashMap<String, usize>, git2::Error> {
         let mut heatmap = Heatmap::new();
         let mut authors: HashMap<String, usize> = HashMap::new();
         let mut revwalk = try!(repo.revwalk());
-        // let mut files_number = Vec::new();
 
         revwalk.push_head();
         revwalk.set_sorting(git2::SORT_TOPOLOGICAL);
         // let mutex = Mutex::new(repo);
 
-        for oid in revwalk {
+        let oids: Vec<git2::Oid> = revwalk.by_ref().collect();
+        println!("total count: {}", oids.len());
+
+        for oid in oids {
             let commit = try!(repo.find_commit(oid));
+            heatmap.append(&commit.time());
+
+            let tree = try!(commit.tree());
+
+            let files = try!(Files::new(&repo, &tree));
+
+            for path in files.iter() {
+                println!("{}", path.to_str().unwrap());
+            }
+            println!("{} {}", oid, files.len());
 
             let uniq_name: String = get_uniq_name(&commit.author());
-            // let (weekday, hour) = get_heatmat_coords(&commit.time());
-            // let tree = try!(commit.tree());
-            // let files = try!(Files::new(&repo, &tree));
-
-            // files_number.push(files.len());
-            heatmap.append(&commit.time());
 
             match authors.entry(uniq_name) {
                 Entry::Vacant(entry) => entry.insert(1),
@@ -202,7 +115,7 @@ mod gitstat {
         Ok(authors)
     }
 
-    fn get_uniq_name(author: &Signature) -> String {
+    fn get_uniq_name(author: &git2::Signature) -> String {
         format!("{} <{}>", author.name().unwrap(), author.email().unwrap())
     }
 
