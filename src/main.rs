@@ -48,7 +48,6 @@ mod gitstat {
     use std::sync::{Mutex, Arc};
     use std::path::Path;
     use core::iter::IntoIterator;
-    use std::ffi;
     use Args;
 
     use snapshot::Snapshot;
@@ -87,40 +86,21 @@ mod gitstat {
         let oids: Vec<git2::Oid> = revwalk.by_ref().collect();
         println!("total count: {}", oids.len());
 
-        for oid in oids[..10].iter() {
+        for oid in oids[..].iter() {
             let commit = try!(repo.find_commit(*oid));
-            let mut extensions: HashMap<ffi::OsString, usize> = HashMap::new();
             heatmap.append(&commit.time());
 
-            let tree = try!(commit.tree());
+            let files = try!(Snapshot::new(&repo, commit.tree_id()));
 
-            let files = try!(Snapshot::new(&repo, &tree));
-
-            for path in files.iter() {
+            // for path in files.iter() {
                 // println!("{}", path.display());
 
-                if let Some(ext) = path.extension() {
-                    match extensions.entry(ext.to_os_string()) {
-                        Entry::Vacant(entry) => entry.insert(1),
-                        Entry::Occupied(mut entry) => {
-                            *entry.get_mut() += 1;
-                            entry.into_mut()
-                        }
-                    };
-                }
-            }
+            // }
             println!("{} {}", oid, files.len());
-            println!("{:?}\n", extensions);
+            println!("{}", files);
 
             let uniq_name: String = get_uniq_name(&commit.author());
-
-            match authors.entry(uniq_name) {
-                Entry::Vacant(entry) => entry.insert(1),
-                Entry::Occupied(mut entry) => {
-                    *entry.get_mut() += 1;
-                    entry.into_mut()
-                }
-            };
+            *authors.entry(uniq_name).or_insert(0) += 1;
         }
 
         println!("{}", heatmap);
