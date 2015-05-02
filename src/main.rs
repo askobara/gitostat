@@ -23,7 +23,7 @@ pub struct Args {
 #[cfg(not(test))]
 fn main() {
     const USAGE: &'static str = "
-usage: gitstat [options] <path>
+usage: gitostat [options] <path>
 Options:
 -h, --help show this message
 ";
@@ -31,13 +31,13 @@ Options:
         .and_then(|d| d.decode())
         .unwrap_or_else(|e| e.exit());
 
-    match gitstat::run(&args) {
+    match gitostat::run(&args) {
         Ok(()) => {},
         Err(e) => println!("error: {}", e)
     }
 }
 
-mod gitstat {
+mod gitostat {
 
     use git2;
     use std::collections::HashMap;
