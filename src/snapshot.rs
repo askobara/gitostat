@@ -1,10 +1,7 @@
 use git2;
-use std::{fmt,slice,path};
+use std::{fmt,path};
 use collections::vec::IntoIter;
 use std::collections::BTreeMap;
-use std::collections::btree_map::Entry;
-use std::fs::File;
-use std::io::{BufReader, BufRead};
 
 pub struct Snapshot {
     files: Vec<path::PathBuf>,
@@ -67,9 +64,6 @@ impl Snapshot {
         self.files.len()
     }
 
-    pub fn iter(&self) -> slice::Iter<path::PathBuf> {
-        self.files.iter()
-    }
 }
 
 impl IntoIterator for Snapshot {
@@ -83,17 +77,10 @@ impl IntoIterator for Snapshot {
 
 impl fmt::Display for Snapshot {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // create BufReader instance for languages.yml
-        // let mut reader = match File::open(&"") {
-        //     Ok(file) => BufReader::new(file),
-        //     Err(error) => panic!("{}", error),
-        // };
+        const MAX: usize = 80;
+        const ARTS: [char; 4] = ['░', '▒', '▓', '█'];
 
-        const max: usize = 80;
-        let step = max as f32 / self.files.len() as f32 ;
-
-        let arts = ['░', '▒', '▓', '█'];
-
+        let step = MAX as f32 / self.files.len() as f32 ;
         let mut pos = 0;
         let mut other = 0_f32;
         let mut labels: Vec<&str> = Vec::new();
@@ -104,21 +91,20 @@ impl fmt::Display for Snapshot {
             if value < 1_f32 || *ext == "none" {
                 other += value
             } else {
-                for i in 0..(value.ceil() as usize) {
-                    print!("{}", arts[pos % arts.len()]);
+                for _ in 0..(value.ceil() as usize) {
+                    let _ = write!(f, "{}", ARTS[pos % ARTS.len()]);
                 }
                 labels.push(&ext[..]);
                 pos += 1;
             }
         }
 
-        for i in 0..(other.ceil() as usize) {
-            print!("{}", arts[pos % arts.len()]);
+        for _ in 0..(other.ceil() as usize) {
+            let _ = write!(f, "{}", ARTS[pos % ARTS.len()]);
         }
 
         labels.push("other");
-        println!("");
-        println!("{:?}", labels);
+        let _ = write!(f, "\n{:?}\n", labels);
 
         Ok(())
     }

@@ -1,4 +1,4 @@
-use std::{fmt,cmp};
+use std::fmt;
 use chrono::*;
 use git2;
 
@@ -27,24 +27,24 @@ impl fmt::Display for Heatmap {
         vec.sort_by(|a, b| b.cmp(a));
         let max = vec[0];
 
-        const arts: [char; 5] = ['.', '▪', '◾', '◼', '⬛'];
-        const days: [&'static str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        const ARTS: [char; 5] = ['.', '▪', '◾', '◼', '⬛'];
+        const DAYS: [&'static str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-        write!(f, "   ");
+        let _ = write!(f, "   ");
         for i in 0..24 {
-            write!(f, "{:3}", i);
+            let _ = write!(f, "{:3}", i);
         }
-        write!(f, "\n");
+        let _ = write!(f, "\n");
 
         for i in 0..24*7 {
             if i % 24 == 0 {
-                write!(f, "{}: ", days[i / 24]);
+                let _ = write!(f, "{}: ", DAYS[i / 24]);
             }
 
-            write!(f, "{:3}", arts[(self.array[i] as f32 / max as f32 * (arts.len() - 1) as f32) as usize]);
+            let _ = write!(f, "{:3}", ARTS[(self.array[i] as f32 / max as f32 * (ARTS.len() - 1) as f32) as usize]);
 
             if (i + 1) % 24 == 0 {
-                write!(f, "\n");
+                let _ = write!(f, "\n");
             }
         }
 

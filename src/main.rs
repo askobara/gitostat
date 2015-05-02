@@ -1,8 +1,5 @@
-#![feature(os)]
 #![feature(core)]
 #![feature(collections)]
-// #![feature(unicode)]
-#![feature(str_char)]
 
 extern crate git2;
 extern crate chrono;
@@ -44,10 +41,7 @@ mod gitstat {
 
     use git2;
     use std::collections::HashMap;
-    use std::collections::hash_map::Entry;
-    use std::sync::{Mutex, Arc};
     use std::path::Path;
-    use core::iter::IntoIterator;
     use Args;
 
     use snapshot::Snapshot;
@@ -57,29 +51,17 @@ mod gitstat {
         let path = Path::new(&args.arg_path);
         let repo = try!(git2::Repository::open(path));
 
-        let authors: HashMap<String, usize> = try!(self::get_authors(&repo));
-
-        // iterate over everything.
-        for (name, count) in authors.iter() {
-            println!("{}: {}", *name, *count);
-        }
+        try!(self::info(&repo));
 
         Ok(())
     }
 
-    /// Helper method for gets HEAD commit of given git repository
-    fn get_head_commit(repo: &Box<git2::Repository>) -> Option<git2::Commit> {
-        repo.head().ok()
-            .and_then(|h| h.target())
-            .and_then(|oid| repo.find_commit(oid).ok())
-    }
-
-    fn get_authors(repo: &git2::Repository) -> Result<HashMap<String, usize>, git2::Error> {
+    fn info(repo: &git2::Repository) -> Result<(), git2::Error> {
         let mut heatmap = Heatmap::new();
         let mut authors: HashMap<String, usize> = HashMap::new();
         let mut revwalk = try!(repo.revwalk());
 
-        revwalk.push_head();
+        try!(revwalk.push_head());
         revwalk.set_sorting(git2::SORT_TOPOLOGICAL);
         // let mutex = Mutex::new(repo);
 
@@ -105,44 +87,16 @@ mod gitstat {
 
         println!("{}", heatmap);
 
-        Ok(authors)
+        // iterate over everything.
+        for (name, count) in authors.iter() {
+            println!("{}: {}", *name, *count);
+        }
+
+        Ok(())
     }
 
     fn get_uniq_name(author: &git2::Signature) -> String {
         format!("{} <{}>", author.name().unwrap(), author.email().unwrap())
     }
 
-}
-
-#[cfg(test)]
-mod tests {
-    use std::old_io::TempDir;
-    use git2::Repository;
-    use gitstat::run;
-
-    // fn repo_init() -> (TempDir, Repository) {
-    //     let td = TempDir::new("test").unwrap();
-    //     let repo = Repository::init(td.path()).unwrap();
-    //     {
-    //         let mut config = repo.config().unwrap();
-    //         config.set_str("user.name", "name").unwrap();
-    //         config.set_str("user.email", "email").unwrap();
-    //         let mut index = repo.index().unwrap();
-    //         let id = index.write_tree().unwrap();
-    //
-    //         let tree = repo.find_tree(id).unwrap();
-    //         let sig = repo.signature().unwrap();
-    //         repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, []).unwrap();
-    //     }
-    //     (td, repo)
-    // }
-    //
-    // #[test]
-    // fn smoke_run() {
-    //     let (td, _repo) = self::repo_init();
-    //     let path = td.unwrap();
-    //     let result = run(&path);
-    //     assert!(result.is_ok());
-    //     assert_eq!(result.unwrap().total, 1);
-    // }
 }
