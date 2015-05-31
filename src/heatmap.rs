@@ -1,5 +1,6 @@
-use std::fmt;
-use chrono::*;
+use std::{fmt, cmp};
+use chrono::offset::{fixed,utc,TimeZone};
+use chrono::{Datelike,Timelike};
 use git2;
 
 pub struct Heatmap {
@@ -13,9 +14,11 @@ impl Heatmap {
 
     pub fn append(&mut self, time: &git2::Time) {
 
-        let timestamp = UTC.timestamp(time.seconds(), 0)
-            .with_timezone(&FixedOffset::east(time.offset_minutes() * 60));
-        let (weekday, hour) = (timestamp.weekday().num_days_from_monday(), timestamp.hour());
+        let timestamp = utc::UTC.timestamp(time.seconds(), 0)
+            .with_timezone(&fixed::FixedOffset::east(time.offset_minutes() * 60));
+
+        let weekday = timestamp.weekday().num_days_from_monday();
+        let hour = timestamp.hour();
 
         self.array[(weekday * 24 + hour) as usize] += 1;
     }
@@ -25,7 +28,7 @@ impl fmt::Display for Heatmap {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut vec = self.array.to_vec();
         vec.sort_by(|a, b| b.cmp(a));
-        let max = vec[0];
+        let max = cmp::max(1, vec[0]);
 
         const ARTS: [char; 5] = ['.', '▪', '◾', '◼', '⬛'];
         const DAYS: [&'static str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];

@@ -1,45 +1,43 @@
 use git2;
-use std::{fmt,path};
+use std::{fmt,path,slice};
 use collections::vec::IntoIter;
 use std::collections::BTreeMap;
+use chrono::offset::{fixed,utc,TimeZone};
+use chrono::datetime;
 
 pub struct Snapshot {
     files: Vec<path::PathBuf>,
-    extensions: BTreeMap<String, usize>
+    extensions: BTreeMap<String, usize>,
+    datetime: datetime::DateTime<fixed::FixedOffset>
 }
 
 impl Snapshot {
 
-    pub fn new(repo: &git2::Repository, id: git2::Oid) -> Result<Snapshot, git2::Error> {
-        Snapshot::create(repo, id, "")
-    }
-
-    fn create(repo: &git2::Repository, id: git2::Oid, prefix: &str) -> Result<Snapshot, git2::Error> {
+    pub fn new(repo: &git2::Repository, commit: &git2::Commit) -> Result<Snapshot, git2::Error> {
         let mut files: Vec<path::PathBuf> = Vec::new();
         let mut extensions: BTreeMap<String, usize> = BTreeMap::new();
 
-        let head_object: git2::Object = try!(repo.find_object(id, Some(git2::ObjectType::Tree)));
-        let mut trees: Vec<git2::Object> = vec![head_object];
+        let head_object: git2::Object = try!(repo.find_object(commit.tree_id(), Some(git2::ObjectType::Tree)));
+        let mut trees: Vec<(path::PathBuf, git2::Object)> = vec![(path::PathBuf::new(), head_object)];
 
-        while let Some(object) = trees.pop() {
+        while let Some((path, object)) = trees.pop() {
+            // gets all entries of tree
             for entry in object.as_tree().unwrap().iter() {
-                // println!("{} {}", entry.id(), path.to_str().unwrap());
                 match entry.kind() {
+                    // the other trees will be added to the stack with
+                    // calculated path
                     Some(git2::ObjectType::Tree) => {
-                        trees.push(try!(entry.to_object(repo)));
+                        let name = entry.name().unwrap_or("<non-utf8 string>");
+                        trees.push((path.join(name), try!(entry.to_object(repo))));
                     },
+                    // blob (aka file) will be pushed to result vector
                     Some(git2::ObjectType::Blob) => {
                         if let Some(name) = entry.name() {
                             // TODO: calculate full path
-                            let path = path::PathBuf::from(prefix).join(name);
-
+                            let path = path.join(name);
                             let ext = match path.extension() {
                                 Some(ext) => {
-                                    let ext_str = match ext.to_str() {
-                                        Some(ext_str) => ext_str,
-                                        None => "none"
-                                    };
-                                    String::from_str(ext_str)
+                                    String::from_str(ext.to_str().unwrap_or("none"))
                                 },
                                 None => String::from_str("none")
                             };
@@ -54,9 +52,14 @@ impl Snapshot {
             }
         }
 
+        let time = commit.time();
+        let datetime = utc::UTC.timestamp(time.seconds(), 0)
+            .with_timezone(&fixed::FixedOffset::east(time.offset_minutes() * 60));
+
         Ok(Snapshot {
             files: files,
-            extensions: extensions
+            extensions: extensions,
+            datetime: datetime
         })
     }
 
@@ -64,6 +67,9 @@ impl Snapshot {
         self.files.len()
     }
 
+    pub fn iter(&self) -> slice::Iter<path::PathBuf> {
+        self.files.iter()
+    }
 }
 
 impl IntoIterator for Snapshot {

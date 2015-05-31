@@ -39,7 +39,7 @@ Options:
 
 mod gitostat {
 
-    use git2;
+    use git2::{self, Diff};
     use std::collections::HashMap;
     use std::path::Path;
     use Args;
@@ -65,25 +65,48 @@ mod gitostat {
         revwalk.set_sorting(git2::SORT_TOPOLOGICAL);
         // let mutex = Mutex::new(repo);
 
-        let oids: Vec<git2::Oid> = revwalk.by_ref().collect();
-        println!("total count: {}", oids.len());
+        let commits = revwalk.filter_map(|oid| {
+            // trying lookup commit in repo, skip if any error
+            let commit = match repo.find_commit(oid) {
+                Ok(commit) => commit,
+                Err(_) => { return None; }
+            };
 
-        for oid in oids[..].iter() {
-            let commit = try!(repo.find_commit(*oid));
+            // also skip merge-commits
+            if commit.parents().len() > 1 { return None; }
+
+            Some(commit)
+        }).take(10);
+
+        // println!("total count: {}", oids.len());
+
+        for commit in commits {
+            let parent = try!(commit.parent(0));
+            let tree = try!(commit.tree());
+            let ptree = try!(parent.tree());
+            let diff = try!(Diff::tree_to_tree(&repo, Some(&ptree), Some(&tree), None));
+            let stats = try!(diff.stats());
+
             heatmap.append(&commit.time());
 
-            let files = try!(Snapshot::new(&repo, commit.tree_id()));
-
-            // for path in files.iter() {
-                // println!("{}", path.display());
-
-            // }
-            println!("{} {}", oid, files.len());
-            println!("{}", files);
+            let files = try!(Snapshot::new(&repo, &commit));
 
             let uniq_name: String = get_uniq_name(&commit.author());
             *authors.entry(uniq_name).or_insert(0) += 1;
+
+            println!("{} {}", commit.id(), commit.author());
+            println!("+/- {:4}/{:4}", stats.insertions(), stats.deletions());
+            for path in files.iter() {
+                println!("{}", path.display());
+            }
+            println!("Total files: {}\n {}", files.len(), files);
+
         }
+
+        // let blame = try!(repo.blame_file(Path::new("web/index.php"), None));
+        // for hunk in blame.iter() {
+        //     println!("{} {}", hunk.final_commit_id(), hunk.final_signature());
+        // }
 
         println!("{}", heatmap);
 
