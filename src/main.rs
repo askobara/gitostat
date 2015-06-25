@@ -79,15 +79,14 @@ mod gitostat {
         let path = Path::new(&args.arg_path);
         let repo = try!(git2::Repository::open(path));
 
-        let mailmap = try!(Mailmap::new(&path.join(".mailmap"))
-                           .map_err(|err| git2::Error::from_str(err.description())));
+        let mailmap = Mailmap::new(&path.join(".mailmap"));
 
-        try!(self::info(&repo, &mailmap));
+        try!(self::info(&repo, mailmap.as_ref()));
 
         Ok(())
     }
 
-    fn info(repo: &git2::Repository, mailmap: &Mailmap) -> Result<(), git2::Error> {
+    fn info(repo: &git2::Repository, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
         let mut heatmap = Heatmap::new();
         let mut authors: HashMap<String, usize> = HashMap::new();
         let mut revwalk = try!(repo.revwalk());
@@ -124,7 +123,13 @@ mod gitostat {
 
             let files = try!(Snapshot::new(&repo, &commit));
 
-            let uniq_name: String = try!(mailmap.map_user(&commit.author()).map_err(|err| git2::Error::from_str(err.description())));
+            let uniq_name: String = match mailmap {
+                None => format!("{}", commit.author()),
+                Some(mm) => {
+                    try!(mm.map_user(&commit.author()).map_err(|err| git2::Error::from_str(err.description())))
+                }
+            };
+
             *authors.entry(uniq_name).or_insert(0) += 1;
 
             println!("{} {}", commit.id(), commit.author());

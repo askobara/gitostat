@@ -37,9 +37,9 @@ impl Snapshot {
                             let path = path.join(name);
                             let ext = match path.extension() {
                                 Some(ext) => {
-                                    String::from_str(ext.to_str().unwrap_or("none"))
+                                    String::from(ext.to_str().unwrap_or("none"))
                                 },
-                                None => String::from_str("none")
+                                None => String::from("none")
                             };
 
                             *extensions.entry(ext).or_insert(0) += 1;

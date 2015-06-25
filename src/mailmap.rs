@@ -1,6 +1,6 @@
 use std::path::Path;
 use std::fmt;
-use std::io::{self,BufReader,BufRead};
+use std::io::{BufReader,BufRead};
 use std::fs::File;
 use std::collections::HashMap;
 use std::string;
@@ -8,7 +8,7 @@ use git2;
 
 macro_rules! ostring {
     ($e:expr) => (match $e {
-        Some(s) => Some(String::from_str(s)),
+        Some(s) => Some(String::from(s)),
         None => None
     })
 }
@@ -62,8 +62,12 @@ pub struct Mailmap {
 
 impl Mailmap {
 
-    pub fn new(path: &Path) -> Result<Mailmap, io::Error> {
-        let file = try!(File::open(path));
+    pub fn new(path: &Path) -> Option<Mailmap> {
+        let file = match File::open(path) {
+            Ok(file) => file,
+            Err(_) => return None
+        };
+
         let reader = BufReader::new(file);
 
         // for more help with this regex see https://www.debuggex.com/r/eF5E6HQm4aAhXEtN
@@ -72,7 +76,10 @@ impl Mailmap {
         let mut authors: HashMap<String, Author> = HashMap::new();
 
         for line in reader.lines() {
-            let line = try!(line);
+            let line = match line {
+                Ok(line) => line,
+                Err(_) => continue
+            };
             if line.chars().nth(0) == Some('#') { continue; }
 
             if let Some(caps) = re.captures(&line[..]) {
@@ -96,7 +103,7 @@ impl Mailmap {
             }
         }
 
-        Ok(Mailmap {
+        Some(Mailmap {
             items: authors
         })
     }
