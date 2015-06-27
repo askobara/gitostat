@@ -18,6 +18,7 @@ use docopt::Docopt;
 mod snapshot;
 mod heatmap;
 mod mailmap;
+mod personal;
 
 #[derive(RustcDecodable)]
 pub struct Args {
@@ -74,6 +75,7 @@ mod gitostat {
     use snapshot::Snapshot;
     use heatmap::Heatmap;
     use mailmap::Mailmap;
+    use personal::PersonalStat;
 
     pub fn run(args: &Args) -> Result<(), git2::Error> {
         let path = Path::new(&args.arg_path);
@@ -88,7 +90,7 @@ mod gitostat {
 
     fn info(repo: &git2::Repository, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
         let mut heatmap = Heatmap::new();
-        let mut authors: HashMap<String, usize> = HashMap::new();
+        let mut authors: HashMap<String, PersonalStat> = HashMap::new();
         let mut revwalk = try!(repo.revwalk());
 
         try!(revwalk.push_head());
@@ -126,14 +128,14 @@ mod gitostat {
             let uniq_name: String = match mailmap {
                 None => format!("{}", commit.author()),
                 Some(mm) => {
-                    try!(mm.map_user(&commit.author()).map_err(|err| git2::Error::from_str(err.description())))
+                    try!(mm.map_user(&commit.author())
+                           .map_err(|err| git2::Error::from_str(err.description())))
                 }
             };
 
-            *authors.entry(uniq_name).or_insert(0) += 1;
+            authors.entry(uniq_name.clone()).or_insert(PersonalStat::new()).add(&stats);
 
-            println!("{} {}", commit.id(), commit.author());
-            println!("+/- {:4}/{:4}", stats.insertions(), stats.deletions());
+            println!("{} {}", commit.id(), uniq_name);
             for path in files.iter() {
                 println!("{}", path.display());
             }
