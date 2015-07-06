@@ -65,7 +65,7 @@ macro_rules! otry {
 
 mod gitostat {
 
-    use git2::{self, Diff};
+    use git2;
     use std::collections::HashMap;
     use std::path::Path;
     use std::error::Error;
@@ -107,20 +107,8 @@ mod gitostat {
         // println!("total count: {}", oids.len());
 
         for commit in commits {
-            let tree = try!(commit.tree());
-            let ptree = if commit.parents().len() == 1 {
-                let parent = try!(commit.parent(0));
-                Some(try!(parent.tree()))
-            } else {
-                None
-            };
-
-            let diff = try!(Diff::tree_to_tree(&repo, ptree.as_ref(), Some(&tree), None));
-            let stats = try!(diff.stats());
 
             heatmap.append(&commit.time());
-
-            let files = try!(Snapshot::new(&repo, &commit));
 
             let uniq_name: String = match mailmap {
                 None => format!("{}", commit.author()),
@@ -130,9 +118,14 @@ mod gitostat {
                 }
             };
 
-            authors.entry(uniq_name.clone()).or_insert(PersonalStat::new()).add(&stats);
+            try!(authors
+                .entry(uniq_name.clone())
+                .or_insert(PersonalStat::new(&commit))
+                .calculate(&repo, &commit));
 
             println!("{} {}", commit.id(), uniq_name);
+
+            let files = try!(Snapshot::new(&repo, &commit));
             for path in files.iter() {
                 println!("{}", path.display());
             }
