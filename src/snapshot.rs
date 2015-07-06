@@ -91,6 +91,9 @@ impl fmt::Display for Snapshot {
         let mut other = 0_f32;
         let mut labels: Vec<&str> = Vec::new();
 
+        try!(writeln!(f, "{}", self.datetime));
+
+        // TODO: sort by count
         for (ext, count) in self.extensions.iter() {
             let value = (*count) as f32 * step;
 
@@ -98,7 +101,7 @@ impl fmt::Display for Snapshot {
                 other += value
             } else {
                 for _ in 0..(value.ceil() as usize) {
-                    let _ = write!(f, "{}", ARTS[pos % ARTS.len()]);
+                    try!(write!(f, "{}", ARTS[pos % ARTS.len()]));
                 }
                 labels.push(&ext[..]);
                 pos += 1;
@@ -106,12 +109,11 @@ impl fmt::Display for Snapshot {
         }
 
         for _ in 0..(other.ceil() as usize) {
-            let _ = write!(f, "{}", ARTS[pos % ARTS.len()]);
+            try!(write!(f, "{}", ARTS[pos % ARTS.len()]));
         }
 
         labels.push("other");
-        let _ = write!(f, "\n{:?}\n", labels);
 
-        Ok(())
+        write!(f, "\n{:?}\n", labels)
     }
 }

@@ -6,7 +6,6 @@
 
 extern crate git2;
 extern crate chrono;
-extern crate getopts;
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate collections;
@@ -53,7 +52,7 @@ macro_rules! error(
 );
 
 #[macro_export]
-/// converts errors into None
+/// converts errors into None and output them into stderr.
 macro_rules! otry {
     ($e:expr) => (match $e {
         Ok(e) => e,
@@ -83,9 +82,7 @@ mod gitostat {
 
         let mailmap = Mailmap::new(&path.join(".mailmap"));
 
-        try!(self::info(&repo, mailmap.as_ref()));
-
-        Ok(())
+        self::info(&repo, mailmap.as_ref())
     }
 
     fn info(repo: &git2::Repository, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {

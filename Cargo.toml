@@ -1,12 +1,11 @@
 [package]
 
 name = "gitostat"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Arthur Skobara <skobara.arthur@gmail.com>"]
 
 [dependencies]
 git2 = "*"
-getopts = "*"
 chrono = "*"
 docopt = "*"
 rustc-serialize = "*"

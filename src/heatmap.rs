@@ -17,11 +17,12 @@ impl Heatmap {
         let timestamp = utc::UTC.timestamp(time.seconds(), 0)
             .with_timezone(&fixed::FixedOffset::east(time.offset_minutes() * 60));
 
-        let weekday = timestamp.weekday().num_days_from_monday();
+        let day = timestamp.weekday().num_days_from_monday();
         let hour = timestamp.hour();
 
-        self.array[(weekday * 24 + hour) as usize] += 1;
+        self.array[(day * 24 + hour) as usize] += 1;
     }
+
 }
 
 impl fmt::Display for Heatmap {
@@ -33,25 +34,34 @@ impl fmt::Display for Heatmap {
         const ARTS: [char; 5] = ['.', '▪', '◾', '◼', '⬛'];
         const DAYS: [&'static str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-        let _ = write!(f, "   ");
+        try!(write!(f, "   "));
         for i in 0..24 {
-            let _ = write!(f, "{:3}", i);
+            try!(write!(f, "{:3}", i));
         }
-        let _ = write!(f, "\n");
+        try!(write!(f, "\n"));
 
-        for i in 0..24*7 {
-            if i % 24 == 0 {
-                let _ = write!(f, "{}: ", DAYS[i / 24]);
+        for day in 0..7 {
+            try!(write!(f, "{}: ", DAYS[day]));
+            for hour in 0..24 {
+                try!(write!(f, "{: >3}", ARTS[(self.array[day * 24 + hour] as f32 / max as f32 * (ARTS.len() - 1) as f32) as usize]));
             }
-
-            let _ = write!(f, "{:3}", ARTS[(self.array[i] as f32 / max as f32 * (ARTS.len() - 1) as f32) as usize]);
-
-            if (i + 1) % 24 == 0 {
-                let _ = write!(f, "\n");
-            }
+            try!(write!(f, "\n"));
         }
 
         Ok(())
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use git2;
+    use heatmap::Heatmap;
+
+    #[test]
+    fn smoke() {
+        let mut hm = Heatmap::new();
+        // Sun, 28 Jun 2015 13:17:20 +0600
+        hm.append(&git2::Time::new(1435475840, 6*60));
+        assert_eq!(hm.array[6 * 24 + 13], 1);
+    }
+}
