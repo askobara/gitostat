@@ -11,6 +11,8 @@ extern crate rustc_serialize;
 extern crate collections;
 extern crate core;
 extern crate regex;
+#[macro_use]
+extern crate prettytable;
 
 use docopt::Docopt;
 
@@ -64,17 +66,14 @@ macro_rules! otry {
 }
 
 mod gitostat {
-
     use git2;
-    use std::collections::HashMap;
     use std::path::Path;
-    use std::error::Error;
     use Args;
 
     use snapshot::Snapshot;
     use heatmap::Heatmap;
     use mailmap::Mailmap;
-    use personal::PersonalStat;
+    use personal::PersonalStats;
 
     pub fn run(args: &Args) -> Result<(), git2::Error> {
         let path = Path::new(&args.arg_path);
@@ -86,45 +85,32 @@ mod gitostat {
     }
 
     fn info(repo: &git2::Repository, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
-        let mut heatmap = Heatmap::new();
-        let mut authors: HashMap<String, PersonalStat> = HashMap::new();
         let mut revwalk = try!(repo.revwalk());
-
         try!(revwalk.push_head());
         revwalk.set_sorting(git2::SORT_TOPOLOGICAL);
         // let mutex = Mutex::new(repo);
 
-        let commits = revwalk.filter_map(|oid| {
+        let commits: Vec<git2::Commit> = revwalk.filter_map(|oid| {
             // trying lookup commit in repo, skip if any error
             let commit = otry!(repo.find_commit(oid));
-
             // also skip merge-commits
             if commit.parents().len() > 1 { return None; }
 
             Some(commit)
-        });
+        }).collect();
 
-        // println!("total count: {}", oids.len());
+        println!("Total numbers of commits: {}", commits.len());
 
-        for commit in commits {
+        let mut heatmap = Heatmap::new();
+        let mut authors = PersonalStats::new(&repo, commits.len());
+
+        for commit in commits.iter() {
 
             heatmap.append(&commit.time());
+            try!(authors.append(&commit, mailmap));
 
-            let uniq_name: String = match mailmap {
-                None => format!("{}", commit.author()),
-                Some(mm) => {
-                    try!(mm.map_user(&commit.author())
-                           .map_err(|err| git2::Error::from_str(err.description())))
-                }
-            };
-
-            try!(authors
-                .entry(uniq_name.clone())
-                .or_insert(PersonalStat::new(&commit))
-                .calculate(&repo, &commit));
-
-            println!("{} {}", commit.id(), uniq_name);
-
+            // println!("{} {}", commit.id(), uniq_name);
+            //
             let files = try!(Snapshot::new(&repo, &commit));
             for path in files.iter() {
                 println!("{}", path.display());
@@ -139,11 +125,7 @@ mod gitostat {
         // }
 
         println!("{}", heatmap);
-
-        // iterate over everything.
-        for (name, count) in authors.iter() {
-            println!("{}: {}", *name, *count);
-        }
+        println!("{}", authors);
 
         Ok(())
     }

@@ -34,7 +34,7 @@ impl fmt::Display for Heatmap {
         const ARTS: [char; 5] = ['.', '▪', '◾', '◼', '⬛'];
         const DAYS: [&'static str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-        try!(write!(f, "   "));
+        try!(write!(f, "     "));
         for i in 0..24 {
             try!(write!(f, "{:3}", i));
         }

@@ -2,14 +2,59 @@ use std::fmt;
 use git2;
 use chrono;
 use chrono::offset::{fixed,utc,TimeZone};
+use std::collections::HashMap;
+use mailmap::Mailmap;
+use prettytable::Table;
+use std::error::Error;
 
-pub struct PersonalStat {
-    count: usize,
-    insertions: usize,
-    deletions: usize,
+pub struct PersonalStats<'repo> {
+    repo: &'repo git2::Repository,
+    authors: HashMap<String, Stat>,
+    total: usize,
+}
 
-    last_commit: Option<MiniCommit>,
-    first_commit: Option<MiniCommit>,
+impl<'repo> PersonalStats<'repo> {
+    pub fn new(repo: &'repo git2::Repository, total: usize) -> PersonalStats<'repo> {
+        PersonalStats { repo: repo, authors: HashMap::new(), total: total }
+    }
+
+    pub fn append(&mut self, commit: &git2::Commit, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
+        let name: String = match mailmap {
+            None => format!("{}", commit.author()),
+            Some(mm) => {
+                try!(mm.map_user(&commit.author())
+                     .map_err(|err| git2::Error::from_str(err.description())))
+            }
+        };
+
+        self.authors
+            .entry(name)
+            .or_insert(Stat::new(&commit))
+            .calculate(self.repo, &commit)
+    }
+}
+
+impl<'repo> fmt::Display for PersonalStats<'repo> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut table = Table::new();
+        table.add_row(row!["Author", "Commits (%)", "Insertions", "Deletions", "Age"]);
+
+        for (name, stat) in self.authors.iter() {
+            let percent = stat.count as f32 / self.total as f32 * 100_f32;
+            let first = stat.first_commit.clone().unwrap();
+            let last = stat.last_commit.clone().unwrap();
+
+            table.add_row(row![
+                          name,
+                          format!("{} ({}%)", stat.count, percent),
+                          format!("{}", stat.insertions),
+                          format!("{}", stat.deletions),
+                          format!("{}", (last.time - first.time).num_days())
+            ]);
+        }
+
+        write!(f, "{}", table)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -30,11 +75,19 @@ impl MiniCommit {
     }
 }
 
-impl PersonalStat {
+struct Stat {
+    count: usize,
+    insertions: usize,
+    deletions: usize,
 
+    last_commit: Option<MiniCommit>,
+    first_commit: Option<MiniCommit>,
+}
+
+impl Stat {
     /// Create empty struct.
-    pub fn new(commit: &git2::Commit) -> PersonalStat {
-        PersonalStat {
+    pub fn new(commit: &git2::Commit) -> Stat {
+        Stat {
             count: 0,
             insertions: 0,
             deletions: 0,
@@ -63,17 +116,6 @@ impl PersonalStat {
         self.deletions += stats.deletions();
         self.first_commit = Some(MiniCommit::new(commit));
         Ok(())
-    }
-}
-
-impl fmt::Display for PersonalStat {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let first = self.first_commit.clone().unwrap();
-        let last = self.last_commit.clone().unwrap();
-
-        write!(f, "{} +{} -{}\nAge {} days",
-               self.count, self.insertions, self.deletions,
-               (last.time - first.time).num_days())
     }
 }
 
