@@ -37,7 +37,7 @@ impl<'repo> PersonalStats<'repo> {
 impl<'repo> fmt::Display for PersonalStats<'repo> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut table = Table::new();
-        table.add_row(row!["Author", "Commits (%)", "Insertions", "Deletions", "Age"]);
+        table.add_row(row!["Author", "Commits (%)", "Insertions", "Deletions", "Age", "Active days"]);
 
         for (name, stat) in self.authors.iter() {
             let percent = stat.count as f32 / self.total as f32 * 100_f32;
@@ -46,10 +46,11 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
 
             table.add_row(row![
                           name,
-                          format!("{} ({}%)", stat.count, percent),
+                          format!("{} ({:.2}%)", stat.count, percent),
                           format!("{}", stat.insertions),
                           format!("{}", stat.deletions),
-                          format!("{}", (last.time - first.time).num_days())
+                          format!("{}", (last.datetime - first.datetime).num_days()),
+                          format!("{}", stat.activity.len())
             ]);
         }
 
@@ -60,7 +61,7 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
 #[derive(Clone, Copy)]
 struct MiniCommit {
     id: git2::Oid,
-    time: chrono::datetime::DateTime<chrono::offset::fixed::FixedOffset>,
+    datetime: chrono::datetime::DateTime<chrono::offset::fixed::FixedOffset>,
 }
 
 impl MiniCommit {
@@ -70,7 +71,7 @@ impl MiniCommit {
 
         MiniCommit {
             id: commit.id(),
-            time: utc::UTC.timestamp(time.seconds(), 0).with_timezone(&tz),
+            datetime: utc::UTC.timestamp(time.seconds(), 0).with_timezone(&tz),
         }
     }
 }
@@ -79,6 +80,8 @@ struct Stat {
     count: usize,
     insertions: usize,
     deletions: usize,
+
+    activity: HashMap<String, usize>,
 
     last_commit: Option<MiniCommit>,
     first_commit: Option<MiniCommit>,
@@ -91,6 +94,7 @@ impl Stat {
             count: 0,
             insertions: 0,
             deletions: 0,
+            activity: HashMap::new(),
             first_commit: None,
             last_commit: Some(MiniCommit::new(commit)),
         }
@@ -98,6 +102,7 @@ impl Stat {
 
     /// Gets diff and save it for current stats.
     pub fn calculate(&mut self, repo: &git2::Repository, commit: &git2::Commit) -> Result<(), git2::Error> {
+        let mini = MiniCommit::new(commit);
         let tree = try!(commit.tree());
 
         // avoid error on the initial commit
@@ -111,10 +116,14 @@ impl Stat {
         let diff = try!(git2::Diff::tree_to_tree(repo, ptree.as_ref(), Some(&tree), None));
         let stats = try!(diff.stats());
 
+        // counting active days
+        let date = format!("{}", mini.datetime.format("%Y-%m-%d"));
+        *self.activity.entry(date).or_insert(0) += 1;
+
         self.count += 1;
         self.insertions += stats.insertions();
         self.deletions += stats.deletions();
-        self.first_commit = Some(MiniCommit::new(commit));
+        self.first_commit = Some(mini);
         Ok(())
     }
 }
