@@ -52,9 +52,9 @@ impl Snapshot {
             }
         }
 
-        let time = commit.time();
-        let datetime = utc::UTC.timestamp(time.seconds(), 0)
-            .with_timezone(&fixed::FixedOffset::east(time.offset_minutes() * 60));
+        let time = commit.author().when();
+        let tz = fixed::FixedOffset::east(time.offset_minutes() * 60);
+        let datetime = utc::UTC.timestamp(time.seconds(), 0) .with_timezone(&tz);
 
         Ok(Snapshot {
             files: files,

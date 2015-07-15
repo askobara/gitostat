@@ -106,7 +106,7 @@ mod gitostat {
 
         for commit in commits.iter() {
 
-            heatmap.append(&commit.time());
+            heatmap.append(&commit.author().when());
             try!(authors.append(&commit, mailmap));
 
             // println!("{} {}", commit.id(), uniq_name);
