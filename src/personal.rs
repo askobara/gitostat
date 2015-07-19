@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt,ops,cmp,default};
 use git2;
 use chrono;
 use chrono::offset::{fixed,utc,TimeZone};
@@ -19,18 +19,22 @@ impl<'repo> PersonalStats<'repo> {
     }
 
     pub fn append(&mut self, commit: &git2::Commit, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
-        let name: String = match mailmap {
-            None => format!("{}", commit.author()),
-            Some(mm) => {
-                try!(mm.map_user(&commit.author())
-                     .map_err(|err| git2::Error::from_str(err.description())))
-            }
-        };
+        let name = try!(PersonalStats::mapped_name(&commit.author(), mailmap));
 
         self.authors
             .entry(name)
             .or_insert(Stat::new(&commit))
             .calculate(self.repo, &commit)
+    }
+
+    pub fn mapped_name(sig: &git2::Signature, mailmap: Option<&Mailmap>) -> Result<String, git2::Error> {
+        match mailmap {
+            None => Ok(format!("{}", sig)),
+            Some(mm) => {
+                mm.map_user(&sig)
+                     .map_err(|err| git2::Error::from_str(err.description()))
+            }
+        }
     }
 }
 
@@ -39,26 +43,36 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
         let mut table = Table::new();
         table.add_row(row!["Author", "Commits (%)", "Insertions", "Deletions", "Age", "Active days"]);
 
+        let mut total = Stat::default();
+
         for (name, stat) in self.authors.iter() {
             let percent = stat.count as f32 / self.total as f32 * 100_f32;
-            let first = stat.first_commit.clone().unwrap();
-            let last = stat.last_commit.clone().unwrap();
+            total = &total + stat;
 
             table.add_row(row![
                           name,
                           format!("{} ({:.2}%)", stat.count, percent),
                           format!("{}", stat.insertions),
                           format!("{}", stat.deletions),
-                          format!("{}", (last.datetime - first.datetime).num_days()),
+                          format!("{}", stat.num_days()),
                           format!("{}", stat.activity.len())
             ]);
         }
+
+        table.add_row(row![
+                      "Total",
+                      format!("{} (100%)", total.count),
+                      format!("{}", total.insertions),
+                      format!("{}", total.deletions),
+                      format!("{}", total.num_days()),
+                      format!("{}", total.activity.len())
+        ]);
 
         write!(f, "{}", table)
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Copy, Clone, Debug)]
 struct MiniCommit {
     id: git2::Oid,
     datetime: chrono::datetime::DateTime<chrono::offset::fixed::FixedOffset>,
@@ -76,6 +90,27 @@ impl MiniCommit {
     }
 }
 
+impl cmp::Ord for MiniCommit {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.datetime.cmp(&other.datetime)
+    }
+}
+
+impl cmp::PartialOrd for MiniCommit {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.datetime.cmp(&other.datetime))
+    }
+}
+
+impl cmp::PartialEq for MiniCommit {
+    fn eq(&self, other: &Self) -> bool {
+        self.datetime == other.datetime
+    }
+}
+
+impl cmp::Eq for MiniCommit { }
+
+#[derive(Debug)]
 struct Stat {
     count: usize,
     insertions: usize,
@@ -126,5 +161,47 @@ impl Stat {
         self.first_commit = Some(mini);
         Ok(())
     }
+
+    /// Returns number of days between first and last commits.
+    pub fn num_days(&self) -> i64 {
+        let first = self.first_commit.clone().unwrap();
+        let last = self.last_commit.clone().unwrap();
+
+        (last.datetime - first.datetime).num_days()
+    }
 }
 
+
+impl default::Default for Stat {
+    fn default() -> Stat {
+        Stat {
+            count: 0,
+            insertions: 0,
+            deletions: 0,
+            activity: HashMap::new(),
+            first_commit: None,
+            last_commit: None
+        }
+    }
+}
+
+impl<'a, 'b> ops::Add<&'b Stat> for &'a Stat {
+    type Output = Stat;
+
+    fn add(self, rhs: &'b Stat) -> Stat {
+        let mut activity = self.activity.clone();
+        for (key, value) in rhs.activity.iter() {
+            *activity.entry(key.clone()).or_insert(0) += *value;
+        }
+
+        Stat {
+            count: self.count + rhs.count,
+            insertions: self.insertions + rhs.insertions,
+            deletions: self.deletions + rhs.deletions,
+            activity: activity,
+            // because None is smaller than other.datetime
+            first_commit: if self.first_commit.is_none() { rhs.first_commit } else { cmp::min(self.first_commit, rhs.first_commit) },
+            last_commit: cmp::max(self.last_commit, rhs.last_commit)
+        }
+    }
+}

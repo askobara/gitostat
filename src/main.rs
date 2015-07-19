@@ -99,8 +99,6 @@ mod gitostat {
             Some(commit)
         }).collect();
 
-        println!("Total numbers of commits: {}", commits.len());
-
         let mut heatmap = Heatmap::new();
         let mut authors = PersonalStats::new(&repo, commits.len());
 
