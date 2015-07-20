@@ -41,31 +41,38 @@ impl<'repo> PersonalStats<'repo> {
 impl<'repo> fmt::Display for PersonalStats<'repo> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut table = Table::new();
-        table.add_row(row!["Author", "Commits (%)", "Insertions", "Deletions", "Age", "Active days"]);
+        table.add_row(row!["Author", "Commits (%)", "Insertions", "Deletions", "Age in days", "Active days (%)"]);
 
         let mut total = Stat::default();
 
         for (name, stat) in self.authors.iter() {
-            let percent = stat.count as f32 / self.total as f32 * 100_f32;
             total = &total + stat;
+
+            let active_days = stat.activity.len();
+            let all_days = cmp::max(1, stat.num_days());
+            let active_days_percent = active_days as f32 / all_days as f32 * 100_f32;
+            let commit_percent = stat.num_commit as f32 / self.total as f32 * 100_f32;
 
             table.add_row(row![
                           name,
-                          format!("{} ({:.2}%)", stat.count, percent),
+                          format!("{} ({:.2}%)", stat.num_commit, commit_percent),
                           format!("{}", stat.insertions),
                           format!("{}", stat.deletions),
-                          format!("{}", stat.num_days()),
-                          format!("{}", stat.activity.len())
+                          format!("{}", all_days),
+                          format!("{} ({:.2}%)", active_days, active_days_percent)
             ]);
         }
 
+        let total_days = total.num_days();
+        let total_active_days = total.activity.len();
+        let total_active_days_percent = total_active_days as f32 / total_days as f32 * 100_f32;
         table.add_row(row![
                       "Total",
-                      format!("{} (100%)", total.count),
+                      format!("{} (100%)", total.num_commit),
                       format!("{}", total.insertions),
                       format!("{}", total.deletions),
-                      format!("{}", total.num_days()),
-                      format!("{}", total.activity.len())
+                      format!("{}", total_days),
+                      format!("{} ({:.2}%)", total_active_days, total_active_days_percent)
         ]);
 
         write!(f, "{}", table)
@@ -112,7 +119,7 @@ impl cmp::Eq for MiniCommit { }
 
 #[derive(Debug)]
 struct Stat {
-    count: usize,
+    num_commit: usize,
     insertions: usize,
     deletions: usize,
 
@@ -126,7 +133,7 @@ impl Stat {
     /// Create empty struct.
     pub fn new(commit: &git2::Commit) -> Stat {
         Stat {
-            count: 0,
+            num_commit: 0,
             insertions: 0,
             deletions: 0,
             activity: HashMap::new(),
@@ -155,7 +162,7 @@ impl Stat {
         let date = format!("{}", mini.datetime.format("%Y-%m-%d"));
         *self.activity.entry(date).or_insert(0) += 1;
 
-        self.count += 1;
+        self.num_commit += 1;
         self.insertions += stats.insertions();
         self.deletions += stats.deletions();
         self.first_commit = Some(mini);
@@ -175,7 +182,7 @@ impl Stat {
 impl default::Default for Stat {
     fn default() -> Stat {
         Stat {
-            count: 0,
+            num_commit: 0,
             insertions: 0,
             deletions: 0,
             activity: HashMap::new(),
@@ -195,7 +202,7 @@ impl<'a, 'b> ops::Add<&'b Stat> for &'a Stat {
         }
 
         Stat {
-            count: self.count + rhs.count,
+            num_commit: self.num_commit + rhs.num_commit,
             insertions: self.insertions + rhs.insertions,
             deletions: self.deletions + rhs.deletions,
             activity: activity,

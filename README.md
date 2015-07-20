@@ -1,4 +1,5 @@
 # Gitostat
+[![Build Status](https://travis-ci.org/askobara/gitostat.svg?branch=master)](https://travis-ci.org/askobara/gitostat)
 
 Tool for obtaining different kind of information from your git repository.
 
