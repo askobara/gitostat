@@ -67,7 +67,9 @@ macro_rules! otry {
 
 mod gitostat {
     use git2;
+    use std::cmp;
     use std::path::Path;
+    use std::collections::BTreeMap;
     use Args;
 
     use snapshot::Snapshot;
@@ -101,26 +103,41 @@ mod gitostat {
 
         let mut heatmap = Heatmap::new();
         let mut authors = PersonalStats::new(&repo, commits.len());
+        let mut num_files: BTreeMap<String, usize> = BTreeMap::new();
 
-        for commit in commits.iter() {
+        for (i, commit) in commits.iter().enumerate() {
+
+            print!("[{}/{}]\r", i+1, commits.len());
 
             heatmap.append(&commit.author().when());
             try!(authors.append(&commit, mailmap));
 
-            // println!("{} {}", commit.id(), uniq_name);
-            //
             let files = try!(Snapshot::new(&repo, &commit));
-            for path in files.iter() {
-                println!("{}", path.display());
-            }
-            println!("Total files: {}\n {}", files.len(), files);
-
+            let key = format!("{}", files.datetime.format("%Y-%m-%d"));
+            let number = num_files.entry(key).or_insert(0);
+            *number = cmp::max(*number, files.len());
         }
+        println!("");
 
-        // let blame = try!(repo.blame_file(Path::new("web/index.php"), None));
-        // for hunk in blame.iter() {
-        //     println!("{} {}", hunk.final_commit_id(), hunk.final_signature());
-        // }
+        let mut vec: Vec<usize> = num_files.values().cloned().collect();
+        vec.sort_by(|a, b| b.cmp(a));
+        let max = cmp::max(1, vec[0]);
+
+        const WIDTH: usize = 60;
+
+        let coeff = if max > WIDTH {
+            WIDTH as f32 / max as f32
+        } else {
+            1f32
+        };
+
+        println!("Files in repo:");
+        for (key, val) in num_files {
+            let value = (val as f32 * coeff).round() as usize;
+            let bar = (0..value).map(|_| '⚫').collect::<String>();
+            println!("{} {:3} {}", key, val, bar);
+        }
+        println!("");
 
         println!("{}", heatmap);
         println!("{}", authors);

@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::fmt;
+use std::{fmt, default};
 use std::io::{BufReader,BufRead};
 use std::fs::File;
 use std::collections::HashMap;
@@ -44,6 +44,16 @@ impl Author {
     }
 }
 
+impl default::Default for Author {
+    fn default() -> Author {
+        Author {
+            name: None,
+            email: None,
+            namemap: HashMap::new()
+        }
+    }
+}
+
 impl fmt::Display for Author {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?} <{:?}>", self.name, self.email)
@@ -80,6 +90,8 @@ impl Mailmap {
                 Ok(line) => line,
                 Err(_) => continue
             };
+
+            // no comments
             if line.chars().nth(0) == Some('#') { continue; }
 
             if let Some(caps) = re.captures(&line[..]) {
@@ -93,7 +105,7 @@ impl Mailmap {
                     new_email = None;
                 }
 
-                let mut me = authors.entry(old_email.unwrap()).or_insert(Author::new(None, None));
+                let mut me = authors.entry(old_email.unwrap()).or_insert(Author::default());
 
                 if let Some(name) = old_name {
                     me.namemap_insert(name, Author::new(new_name, new_email));

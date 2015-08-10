@@ -8,9 +8,17 @@ use chrono::datetime;
 pub struct Snapshot {
     files: Vec<path::PathBuf>,
     extensions: BTreeMap<String, usize>,
-    datetime: datetime::DateTime<fixed::FixedOffset>
+    pub datetime: datetime::DateTime<fixed::FixedOffset>
 }
 
+/// Example:
+///
+/// ```
+/// let files = try!(Snapshot::new(&repo, &commit));
+/// for path in files.iter() {
+///     println!("{}", path.display());
+/// }
+/// ```
 impl Snapshot {
 
     pub fn new(repo: &git2::Repository, commit: &git2::Commit) -> Result<Snapshot, git2::Error> {
@@ -54,7 +62,7 @@ impl Snapshot {
 
         let time = commit.author().when();
         let tz = fixed::FixedOffset::east(time.offset_minutes() * 60);
-        let datetime = utc::UTC.timestamp(time.seconds(), 0) .with_timezone(&tz);
+        let datetime = utc::UTC.timestamp(time.seconds(), 0).with_timezone(&tz);
 
         Ok(Snapshot {
             files: files,
@@ -67,6 +75,7 @@ impl Snapshot {
         self.files.len()
     }
 
+    #[allow(dead_code)]
     pub fn iter(&self) -> slice::Iter<path::PathBuf> {
         self.files.iter()
     }

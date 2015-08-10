@@ -2,10 +2,11 @@ use std::{fmt,ops,cmp,default};
 use git2;
 use chrono;
 use chrono::offset::{fixed,utc,TimeZone};
-use std::collections::HashMap;
+use std::collections::{BTreeMap,HashMap};
 use mailmap::Mailmap;
 use prettytable::Table;
 use std::error::Error;
+use std::ops::{Add,Sub};
 
 pub struct PersonalStats<'repo> {
     repo: &'repo git2::Repository,
@@ -48,7 +49,7 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
         for (name, stat) in self.authors.iter() {
             total = &total + stat;
 
-            let active_days = stat.activity.len();
+            let active_days = stat.activity_days.len();
             let all_days = cmp::max(1, stat.num_days());
             let active_days_percent = active_days as f32 / all_days as f32 * 100_f32;
             let commit_percent = stat.num_commit as f32 / self.total as f32 * 100_f32;
@@ -61,10 +62,11 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
                           format!("{}", all_days),
                           format!("{} ({:.2}%)", active_days, active_days_percent)
             ]);
+
         }
 
         let total_days = total.num_days();
-        let total_active_days = total.activity.len();
+        let total_active_days = total.activity_days.len();
         let total_active_days_percent = total_active_days as f32 / total_days as f32 * 100_f32;
         table.add_row(row![
                       "Total",
@@ -74,6 +76,33 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
                       format!("{}", total_days),
                       format!("{} ({:.2}%)", total_active_days, total_active_days_percent)
         ]);
+
+        let mut vec: Vec<usize> = total.activity_weeks.values().cloned().collect();
+        vec.sort_by(|a, b| b.cmp(a));
+        let max = cmp::max(1, vec[0]);
+
+        const WIDTH: usize = 60;
+
+        let coeff = if max > WIDTH {
+            WIDTH as f32 / max as f32
+        } else {
+            1f32
+        };
+
+        let now = chrono::offset::local::Local::now();
+        let start = total.first_commit.clone().unwrap();
+        let num_weeks = now.sub(start.datetime).num_weeks();
+
+        try!(writeln!(f, "Activity by weeks:"));
+        for i in 0..num_weeks {
+            let step = start.datetime.add(chrono::duration::Duration::weeks(i));
+            let key = format!("{}", step.format("%Y-%W"));
+            let val = *total.activity_weeks.get(&key).unwrap_or(&0);
+            let value = (val as f32 * coeff).round() as usize;
+            let bar = (0..value).map(|_| '⚫').collect::<String>();
+            try!(writeln!(f, "{} {:3} {}", step.format("%b %Y"), val, bar));
+        }
+        try!(writeln!(f, ""));
 
         write!(f, "{}", table)
     }
@@ -87,7 +116,7 @@ struct MiniCommit {
 
 impl MiniCommit {
     pub fn new(commit: &git2::Commit) -> MiniCommit {
-        let time = commit.time();
+        let time = commit.author().when();
         let tz = fixed::FixedOffset::east(time.offset_minutes() * 60);
 
         MiniCommit {
@@ -123,7 +152,8 @@ struct Stat {
     insertions: usize,
     deletions: usize,
 
-    activity: HashMap<String, usize>,
+    activity_days: HashMap<String, usize>,
+    activity_weeks: BTreeMap<String, usize>,
 
     last_commit: Option<MiniCommit>,
     first_commit: Option<MiniCommit>,
@@ -136,8 +166,9 @@ impl Stat {
             num_commit: 0,
             insertions: 0,
             deletions: 0,
-            activity: HashMap::new(),
-            first_commit: None,
+            activity_days: HashMap::new(),
+            activity_weeks: BTreeMap::new(),
+            first_commit: Some(MiniCommit::new(commit)),
             last_commit: Some(MiniCommit::new(commit)),
         }
     }
@@ -159,13 +190,23 @@ impl Stat {
         let stats = try!(diff.stats());
 
         // counting active days
-        let date = format!("{}", mini.datetime.format("%Y-%m-%d"));
-        *self.activity.entry(date).or_insert(0) += 1;
+        let day = format!("{}", mini.datetime.format("%Y-%m-%d"));
+        *self.activity_days.entry(day).or_insert(0) += 1;
+
+        // counting active weeks
+        let week = format!("{}", mini.datetime.format("%Y-%W"));
+        *self.activity_weeks.entry(week).or_insert(0) += 1;
 
         self.num_commit += 1;
         self.insertions += stats.insertions();
         self.deletions += stats.deletions();
-        self.first_commit = Some(mini);
+
+        // commits can be in topological order
+        // so, we should ensure that first_commit is oldest
+        // and last_commit is newest
+        self.first_commit = if self.first_commit.is_none() { Some(mini) } else { cmp::min(self.first_commit, Some(mini)) };
+        self.last_commit =  cmp::max(self.last_commit, Some(mini));
+
         Ok(())
     }
 
@@ -185,27 +226,42 @@ impl default::Default for Stat {
             num_commit: 0,
             insertions: 0,
             deletions: 0,
-            activity: HashMap::new(),
+            activity_days: HashMap::new(),
+            activity_weeks: BTreeMap::new(),
             first_commit: None,
             last_commit: None
         }
     }
 }
 
+fn merge_hashmaps(lhs: &HashMap<String, usize>, rhs: &HashMap<String, usize>) -> HashMap<String, usize> {
+    let mut result = lhs.clone();
+    for (key, value) in rhs.iter() {
+        *result.entry(key.clone()).or_insert(0) += *value;
+    }
+
+    result
+}
+
+fn merge_btreemaps(lhs: &BTreeMap<String, usize>, rhs: &BTreeMap<String, usize>) -> BTreeMap<String, usize> {
+    let mut result = lhs.clone();
+    for (key, value) in rhs.iter() {
+        *result.entry(key.clone()).or_insert(0) += *value;
+    }
+
+    result
+}
+
 impl<'a, 'b> ops::Add<&'b Stat> for &'a Stat {
     type Output = Stat;
 
     fn add(self, rhs: &'b Stat) -> Stat {
-        let mut activity = self.activity.clone();
-        for (key, value) in rhs.activity.iter() {
-            *activity.entry(key.clone()).or_insert(0) += *value;
-        }
-
         Stat {
             num_commit: self.num_commit + rhs.num_commit,
             insertions: self.insertions + rhs.insertions,
             deletions: self.deletions + rhs.deletions,
-            activity: activity,
+            activity_days: merge_hashmaps(&self.activity_days, &rhs.activity_days),
+            activity_weeks: merge_btreemaps(&self.activity_weeks, &rhs.activity_weeks),
             // because None is smaller than other.datetime
             first_commit: if self.first_commit.is_none() { rhs.first_commit } else { cmp::min(self.first_commit, rhs.first_commit) },
             last_commit: cmp::max(self.last_commit, rhs.last_commit)

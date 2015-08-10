@@ -17,25 +17,31 @@ Tool for obtaining different kind of information from your git repository.
     Sun:   ▪  .  .  .  .  .  .  .  .  .  ▪  .  .  .  .  .  ▪  .  .  .  .  ▪  ▪  ◾
     ```
 
-* Files snapshot with counting relative amount of the file types
+* Files snapshot with counting relative amount of the file types which using in graphics below
 
     ```
-    .gitignore
-    .mailmap
-    Cargo.lock
-    Cargo.toml
-    LICENSE
-    README.md
-    src/heatmap.rs
-    src/languages.yml
-    src/mailmap.rs
-    src/main.rs
-    src/personal.rs
-    src/snapshot.rs
-    Total files: 12
-     2015-07-19 16:04:12 +06:00
-    ░░░░░░░▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓███████░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
-    ["lock", "md", "rs", "toml", "yml", "other"]
+    Files in repo:
+    2014-10-05   5 ⚫⚫⚫⚫⚫
+    2014-10-12   5 ⚫⚫⚫⚫⚫
+    2014-10-14   5 ⚫⚫⚫⚫⚫
+    2014-10-15   5 ⚫⚫⚫⚫⚫
+    2015-04-03   5 ⚫⚫⚫⚫⚫
+    2015-04-04   5 ⚫⚫⚫⚫⚫
+    2015-04-05   5 ⚫⚫⚫⚫⚫
+    2015-04-06   5 ⚫⚫⚫⚫⚫
+    2015-04-07   5 ⚫⚫⚫⚫⚫
+    2015-04-08   5 ⚫⚫⚫⚫⚫
+    2015-05-01   7 ⚫⚫⚫⚫⚫⚫⚫
+    2015-05-02   8 ⚫⚫⚫⚫⚫⚫⚫⚫
+    2015-05-31   9 ⚫⚫⚫⚫⚫⚫⚫⚫⚫
+    2015-06-14  11 ⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫
+    2015-06-25  11 ⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫
+    2015-06-28  12 ⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫
+    2015-07-06  12 ⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫
+    2015-07-09  12 ⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫
+    2015-07-15  12 ⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫
+    2015-07-19  12 ⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫
+    2015-07-20  13 ⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫⚫
     ```
 
 * Counting personal stats of authors (with respect .mailmap)
@@ -50,6 +56,56 @@ Tool for obtaining different kind of information from your git repository.
     +-------------------------------------------+--------------+------------+-----------+-----+-------------+
     ```
 
+* Activity in repo by weeks
+
+    ```
+    Oct 2014   1 ⚫
+    Oct 2014   1 ⚫
+    Oct 2014   2 ⚫⚫
+    Oct 2014   0
+    Nov 2014   0
+    Nov 2014   0
+    Nov 2014   0
+    Nov 2014   0
+    Nov 2014   0
+    Dec 2014   0
+    Dec 2014   0
+    Dec 2014   0
+    Dec 2014   0
+    Jan 2015   0
+    Jan 2015   0
+    Jan 2015   0
+    Jan 2015   0
+    Feb 2015   0
+    Feb 2015   0
+    Feb 2015   0
+    Feb 2015   0
+    Mar 2015   0
+    Mar 2015   0
+    Mar 2015   0
+    Mar 2015   0
+    Mar 2015   0
+    Apr 2015   4 ⚫⚫⚫⚫
+    Apr 2015   3 ⚫⚫⚫
+    Apr 2015   0
+    Apr 2015   0
+    May 2015   8 ⚫⚫⚫⚫⚫⚫⚫⚫
+    May 2015   0
+    May 2015   0
+    May 2015   0
+    May 2015   1 ⚫
+    Jun 2015   0
+    Jun 2015   1 ⚫
+    Jun 2015   0
+    Jun 2015   2 ⚫⚫
+    Jul 2015   0
+    Jul 2015   3 ⚫⚫⚫
+    Jul 2015   3 ⚫⚫⚫
+    Jul 2015   1 ⚫
+    Aug 2015   0
+    ```
+
 ### TODO
+* More tests
 * Counting average age of the repo
 * Counting percent of author's code
