@@ -1,6 +1,8 @@
 # Gitostat
 [![Build Status](https://travis-ci.org/askobara/gitostat.svg?branch=master)](https://travis-ci.org/askobara/gitostat)
 
+[![Build Status](https://codeship.com/projects/d5719a20-66c5-0133-ca70-3685ec7a2958/status?branch=master)](https://codeship.com/projects/113864)
+
 Tool for obtaining different kind of information from your git repository.
 
 ### Current functionals
