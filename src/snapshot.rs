@@ -1,13 +1,13 @@
 use git2;
 use std::{fmt,path,slice};
 use collections::vec::IntoIter;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use chrono::offset::{fixed,utc,TimeZone};
 use chrono::datetime;
 
 pub struct Snapshot {
     files: Vec<path::PathBuf>,
-    extensions: BTreeMap<String, usize>,
+    extensions: HashMap<String, usize>,
     pub datetime: datetime::DateTime<fixed::FixedOffset>
 }
 
@@ -23,7 +23,7 @@ impl Snapshot {
 
     pub fn new(repo: &git2::Repository, commit: &git2::Commit) -> Result<Snapshot, git2::Error> {
         let mut files: Vec<path::PathBuf> = Vec::new();
-        let mut extensions: BTreeMap<String, usize> = BTreeMap::new();
+        let mut extensions: HashMap<String, usize> = HashMap::new();
 
         let head_object: git2::Object = try!(repo.find_object(commit.tree_id(), Some(git2::ObjectType::Tree)));
         let mut trees: Vec<(path::PathBuf, git2::Object)> = vec![(path::PathBuf::new(), head_object)];

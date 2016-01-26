@@ -99,8 +99,8 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
             let key = format!("{}", step.format("%Y-%W"));
             let val = *total.activity_weeks.get(&key).unwrap_or(&0);
             let value = (val as f32 * coeff).round() as usize;
-            let bar = (0..value).map(|_| '⚫').collect::<String>();
-            try!(writeln!(f, "{} {:3} {}", step.format("%b %Y"), val, bar));
+            let bar = (0..value).map(|_| "░").collect::<String>();
+            try!(writeln!(f, "{} {:3} {}", key, val, bar + "▏"));
         }
         try!(writeln!(f, ""));
 

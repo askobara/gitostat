@@ -1,4 +1,3 @@
-#![feature(core)]
 #![feature(collections)]
 #![feature(plugin)]
 
@@ -113,7 +112,7 @@ mod gitostat {
             try!(authors.append(&commit, mailmap));
 
             let files = try!(Snapshot::new(&repo, &commit));
-            let key = format!("{}", files.datetime.format("%Y-%m-%d"));
+            let key = format!("{}", files.datetime.format("%Y-%W"));
             let number = num_files.entry(key).or_insert(0);
             *number = cmp::max(*number, files.len());
         }
@@ -134,8 +133,8 @@ mod gitostat {
         println!("Files in repo:");
         for (key, val) in num_files {
             let value = (val as f32 * coeff).round() as usize;
-            let bar = (0..value).map(|_| '⚫').collect::<String>();
-            println!("{} {:3} {}", key, val, bar);
+            let bar = (0..value).map(|_| "░").collect::<String>();
+            println!("{} {:3} {}", key, val, bar + "▏");
         }
         println!("");
 
