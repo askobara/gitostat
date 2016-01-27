@@ -1,6 +1,5 @@
 use git2;
 use std::{fmt,path,slice};
-use collections::vec::IntoIter;
 use std::collections::HashMap;
 use chrono::offset::{fixed,utc,TimeZone};
 use chrono::datetime;
@@ -78,15 +77,6 @@ impl Snapshot {
     #[allow(dead_code)]
     pub fn iter(&self) -> slice::Iter<path::PathBuf> {
         self.files.iter()
-    }
-}
-
-impl IntoIterator for Snapshot {
-    type Item = path::PathBuf;
-    type IntoIter = IntoIter<path::PathBuf>;
-
-    fn into_iter(self) -> IntoIter<path::PathBuf> {
-        self.files.into_iter()
     }
 }
 

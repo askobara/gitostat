@@ -5,6 +5,7 @@ use std::fs::File;
 use std::collections::HashMap;
 use std::string;
 use git2;
+use regex::Regex;
 
 macro_rules! ostring {
     ($e:expr) => (match $e {
@@ -81,7 +82,7 @@ impl Mailmap {
         let reader = BufReader::new(file);
 
         // for more help with this regex see https://www.debuggex.com/r/eF5E6HQm4aAhXEtN
-        let re = regex!(r"^((?P<new_name>.+?)\s+)??<\s*(?P<new_email>.+?)\s*>((\s+(?P<old_name>.+?))??\s+<\s*(?P<old_email>.+?)\s*>)?");
+        let re = Regex::new(r"^((?P<new_name>.+?)\s+)??<\s*(?P<new_email>.+?)\s*>((\s+(?P<old_name>.+?))??\s+<\s*(?P<old_email>.+?)\s*>)?").unwrap();
 
         let mut authors: HashMap<String, Author> = HashMap::new();
 

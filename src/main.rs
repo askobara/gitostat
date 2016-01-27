@@ -1,13 +1,7 @@
-#![feature(collections)]
-#![feature(plugin)]
-
-#![plugin(regex_macros)]
-
 extern crate git2;
 extern crate chrono;
 extern crate docopt;
 extern crate rustc_serialize;
-extern crate collections;
 extern crate core;
 extern crate regex;
 #[macro_use]
