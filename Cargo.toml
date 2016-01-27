@@ -3,12 +3,16 @@
 name = "gitostat"
 version = "0.3.0"
 authors = ["Arthur Skobara <skobara.arthur@gmail.com>"]
+description = "Tool for obtaining different kind of information from your git repository"
+repository = "https://github.com/askobara/gitostat"
+license = "MIT"
+readme = "README.md"
 
 [dependencies]
-git2 = "*"
-chrono = "*"
-docopt = "*"
-rustc-serialize = "*"
-regex = "*"
-regex_macros = "*"
-prettytable-rs = "*"
+git2 = "^0.3"
+chrono = "^0.2"
+docopt = "^0.6"
+rustc-serialize = "^0.3"
+regex = "^0.1"
+regex_macros = "^0.1"
+prettytable-rs = "0.5.0"
