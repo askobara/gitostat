@@ -101,7 +101,7 @@ mod gitostat {
         }).collect();
 
         let mut heatmap = Heatmap::new();
-        let mut authors = PersonalStats::new(&repo, commits.len());
+        let mut authors = PersonalStats::new(&repo);
         let mut num_files: BTreeMap<String, usize> = BTreeMap::new();
 
         for (i, commit) in commits.iter().enumerate() {

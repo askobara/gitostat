@@ -15,12 +15,14 @@ pub struct PersonalStats<'repo> {
 }
 
 impl<'repo> PersonalStats<'repo> {
-    pub fn new(repo: &'repo git2::Repository, total: usize) -> PersonalStats<'repo> {
-        PersonalStats { repo: repo, authors: HashMap::new(), total: total }
+    pub fn new(repo: &'repo git2::Repository) -> PersonalStats<'repo> {
+        PersonalStats { repo: repo, authors: HashMap::new(), total: 0 }
     }
 
     pub fn append(&mut self, commit: &git2::Commit, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
         let name = try!(PersonalStats::mapped_name(&commit.author(), mailmap));
+
+        self.total += 1;
 
         self.authors
             .entry(name)
