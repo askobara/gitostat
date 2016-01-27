@@ -11,23 +11,32 @@ use std::ops::{Add,Sub};
 pub struct PersonalStats<'repo> {
     repo: &'repo git2::Repository,
     authors: HashMap<String, Stat>,
-    total: usize,
 }
 
 impl<'repo> PersonalStats<'repo> {
     pub fn new(repo: &'repo git2::Repository) -> PersonalStats<'repo> {
-        PersonalStats { repo: repo, authors: HashMap::new(), total: 0 }
+        PersonalStats { repo: repo, authors: HashMap::new() }
     }
 
     pub fn append(&mut self, commit: &git2::Commit, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
         let name = try!(PersonalStats::mapped_name(&commit.author(), mailmap));
 
-        self.total += 1;
-
         self.authors
             .entry(name)
             .or_insert(Stat::new(&commit))
             .calculate(self.repo, &commit)
+    }
+
+    pub fn blame(&mut self, blame: &git2::Blame, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
+        for hunk in blame.iter() {
+            let name = try!(PersonalStats::mapped_name(&hunk.final_signature(), mailmap));
+
+            if let Some(entry) = self.authors.get_mut(&name) {
+                entry.num_lines += hunk.lines_in_hunk();
+            }
+        }
+
+        Ok(())
     }
 
     pub fn mapped_name(sig: &git2::Signature, mailmap: Option<&Mailmap>) -> Result<String, git2::Error> {
@@ -44,23 +53,25 @@ impl<'repo> PersonalStats<'repo> {
 impl<'repo> fmt::Display for PersonalStats<'repo> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut table = Table::new();
-        table.add_row(row!["Author", "Commits (%)", "Insertions", "Deletions", "Age in days", "Active days (%)"]);
+        table.add_row(row!["Author", "Commits (%)", "Insertions", "Deletions", "Lines", "Age in days", "Active days (%)"]);
 
         let mut total = Stat::default();
 
-        for (name, stat) in self.authors.iter() {
+        for (name, stat) in &self.authors {
             total = &total + stat;
 
             let active_days = stat.activity_days.len();
             let all_days = cmp::max(1, stat.num_days());
             let active_days_percent = active_days as f32 / all_days as f32 * 100_f32;
-            let commit_percent = stat.num_commit as f32 / self.total as f32 * 100_f32;
+            // let commit_percent = stat.num_commit as f32 / self.total as f32 * 100_f32;
+            let commit_percent = 0;
 
             table.add_row(row![
                           name,
                           format!("{} ({:.2}%)", stat.num_commit, commit_percent),
                           format!("{}", stat.insertions),
                           format!("{}", stat.deletions),
+                          format!("{}", stat.num_lines),
                           format!("{}", all_days),
                           format!("{} ({:.2}%)", active_days, active_days_percent)
             ]);
@@ -75,6 +86,7 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
                       format!("{} (100%)", total.num_commit),
                       format!("{}", total.insertions),
                       format!("{}", total.deletions),
+                      format!("{}", total.num_lines),
                       format!("{}", total_days),
                       format!("{} ({:.2}%)", total_active_days, total_active_days_percent)
         ]);
@@ -151,6 +163,7 @@ impl cmp::Eq for MiniCommit { }
 #[derive(Debug)]
 struct Stat {
     num_commit: usize,
+    num_lines: usize,
     insertions: usize,
     deletions: usize,
 
@@ -166,6 +179,7 @@ impl Stat {
     pub fn new(commit: &git2::Commit) -> Stat {
         Stat {
             num_commit: 0,
+            num_lines: 0,
             insertions: 0,
             deletions: 0,
             activity_days: HashMap::new(),
@@ -226,6 +240,7 @@ impl default::Default for Stat {
     fn default() -> Stat {
         Stat {
             num_commit: 0,
+            num_lines: 0,
             insertions: 0,
             deletions: 0,
             activity_days: HashMap::new(),
@@ -260,6 +275,7 @@ impl<'a, 'b> ops::Add<&'b Stat> for &'a Stat {
     fn add(self, rhs: &'b Stat) -> Stat {
         Stat {
             num_commit: self.num_commit + rhs.num_commit,
+            num_lines: self.num_lines + rhs.num_lines,
             insertions: self.insertions + rhs.insertions,
             deletions: self.deletions + rhs.deletions,
             activity_days: merge_hashmaps(&self.activity_days, &rhs.activity_days),

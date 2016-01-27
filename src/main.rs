@@ -112,6 +112,14 @@ mod gitostat {
         }
         println!("");
 
+        if let Some(commit) = commits.first() {
+            let files = try!(Snapshot::new(&repo, &commit));
+            for path in files.iter() {
+                let blame = try!(repo.blame_file(&path, None));
+                try!(authors.blame(&blame, mailmap));
+            }
+        }
+
         let mut vec: Vec<usize> = num_files.values().cloned().collect();
         vec.sort_by(|a, b| b.cmp(a));
         let max = cmp::max(1, vec[0]);
@@ -125,7 +133,7 @@ mod gitostat {
         };
 
         println!("Files in repo:");
-        for (key, val) in num_files {
+        for (key, &val) in &num_files {
             let value = (val as f32 * coeff).round() as usize;
             let bar = (0..value).map(|_| "░").collect::<String>();
             println!("{} {:3} {}", key, val, bar + "▏");

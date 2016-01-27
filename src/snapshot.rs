@@ -93,8 +93,8 @@ impl fmt::Display for Snapshot {
         try!(writeln!(f, "{}", self.datetime));
 
         // TODO: sort by count
-        for (ext, count) in self.extensions.iter() {
-            let value = (*count) as f32 * step;
+        for (ext, &count) in &self.extensions {
+            let value = count as f32 * step;
 
             if value < 1_f32 || *ext == "none" {
                 other += value
