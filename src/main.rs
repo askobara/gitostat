@@ -114,10 +114,12 @@ mod gitostat {
 
         if let Some(commit) = commits.first() {
             let files = try!(Snapshot::new(&repo, &commit));
-            for path in files.iter() {
+            for (i, path) in files.iter().enumerate() {
+                print!("[{}/{}]\r", i+1, files.len());
                 let blame = try!(repo.blame_file(&path, None));
                 try!(authors.blame(&blame, mailmap));
             }
+            println!("Scaned {}", files.len());
         }
 
         let mut vec: Vec<usize> = num_files.values().cloned().collect();

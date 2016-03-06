@@ -55,27 +55,24 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
         let mut table = Table::new();
         table.add_row(row!["Author", "Commits (%)", "Insertions", "Deletions", "Lines", "Age in days", "Active days (%)"]);
 
-        let mut total = Stat::default();
+        let total = self.authors.iter().fold(Stat::default(), |total, item| &total + item.1);
 
         for (name, stat) in &self.authors {
-            total = &total + stat;
-
             let active_days = stat.activity_days.len();
             let all_days = cmp::max(1, stat.num_days());
             let active_days_percent = active_days as f32 / all_days as f32 * 100_f32;
-            // let commit_percent = stat.num_commit as f32 / self.total as f32 * 100_f32;
-            let commit_percent = 0;
+            let commit_percent = stat.num_commit as f32 / total.num_commit as f32 * 100_f32;
+            let lines_percent = stat.num_lines as f32 / total.num_lines as f32 * 100_f32;
 
             table.add_row(row![
                           name,
                           format!("{} ({:.2}%)", stat.num_commit, commit_percent),
                           format!("{}", stat.insertions),
                           format!("{}", stat.deletions),
-                          format!("{}", stat.num_lines),
+                          format!("{} ({:.2}%)", stat.num_lines, lines_percent),
                           format!("{}", all_days),
                           format!("{} ({:.2}%)", active_days, active_days_percent)
             ]);
-
         }
 
         let total_days = total.num_days();
@@ -86,7 +83,7 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
                       format!("{} (100%)", total.num_commit),
                       format!("{}", total.insertions),
                       format!("{}", total.deletions),
-                      format!("{}", total.num_lines),
+                      format!("{} (100%)", total.num_lines),
                       format!("{}", total_days),
                       format!("{} ({:.2}%)", total_active_days, total_active_days_percent)
         ]);
