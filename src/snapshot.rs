@@ -1,13 +1,12 @@
 use git2;
-use std::{fmt,path,slice};
-use std::collections::HashMap;
+use std::{path,slice,marker};
 use chrono::offset::{fixed,utc,TimeZone};
 use chrono::datetime;
 
-pub struct Snapshot {
+pub struct Snapshot<'repo> {
     files: Vec<path::PathBuf>,
-    extensions: HashMap<String, usize>,
-    pub datetime: datetime::DateTime<fixed::FixedOffset>
+    pub datetime: datetime::DateTime<fixed::FixedOffset>,
+    _marker: marker::PhantomData<&'repo git2::Repository>,
 }
 
 /// Example:
@@ -18,40 +17,40 @@ pub struct Snapshot {
 ///     println!("{}", path.display());
 /// }
 /// ```
-impl Snapshot {
+impl<'repo> Snapshot<'repo> {
 
-    pub fn new(repo: &git2::Repository, commit: &git2::Commit) -> Result<Snapshot, git2::Error> {
+    pub fn new(repo: &'repo git2::Repository, commit: &git2::Commit, no_binary: bool) -> Result<Snapshot<'repo>, git2::Error> {
         let mut files: Vec<path::PathBuf> = Vec::new();
-        let mut extensions: HashMap<String, usize> = HashMap::new();
 
-        let head_object: git2::Object = try!(repo.find_object(commit.tree_id(), Some(git2::ObjectType::Tree)));
-        let mut trees: Vec<(path::PathBuf, git2::Object)> = vec![(path::PathBuf::new(), head_object)];
+        let head = try!(repo.find_object(commit.tree_id(), Some(git2::ObjectType::Tree)));
+        let mut trees = vec![(path::PathBuf::new(), head)];
 
         while let Some((path, object)) = trees.pop() {
             // gets all entries of tree
             for entry in object.as_tree().unwrap().iter() {
                 match entry.kind() {
-                    // the other trees will be added to the stack with
-                    // calculated path
+                    // other trees with resolved path will be added to the stack
                     Some(git2::ObjectType::Tree) => {
                         let name = entry.name().unwrap_or("<non-utf8 string>");
-                        trees.push((path.join(name), try!(entry.to_object(repo))));
+                        let object = try!(entry.to_object(repo));
+                        trees.push((path.join(name), object));
                     },
-                    // blob (aka file) will be pushed to result vector
+                    // blob will be pushed to result vector
                     Some(git2::ObjectType::Blob) => {
                         if let Some(name) = entry.name() {
-                            // TODO: calculate full path
                             let path = path.join(name);
-                            let ext = match path.extension() {
-                                Some(ext) => {
-                                    String::from(ext.to_str().unwrap_or("none"))
-                                },
-                                None => String::from("none")
+
+                            let is_binary = if no_binary {
+                                let object = try!(entry.to_object(repo));
+                                object.as_blob().unwrap().is_binary()
+                            } else {
+                                false
                             };
 
-                            *extensions.entry(ext).or_insert(0) += 1;
+                            if !is_binary {
+                                files.push(path)
+                            }
 
-                            files.push(path)
                         }
                     },
                     _ => {}
@@ -65,8 +64,8 @@ impl Snapshot {
 
         Ok(Snapshot {
             files: files,
-            extensions: extensions,
-            datetime: datetime
+            datetime: datetime,
+            _marker: marker::PhantomData,
         })
     }
 
@@ -77,42 +76,5 @@ impl Snapshot {
     #[allow(dead_code)]
     pub fn iter(&self) -> slice::Iter<path::PathBuf> {
         self.files.iter()
-    }
-}
-
-impl fmt::Display for Snapshot {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        const MAX: usize = 80;
-        const ARTS: [char; 4] = ['░', '▒', '▓', '█'];
-
-        let step = MAX as f32 / self.files.len() as f32 ;
-        let mut pos = 0;
-        let mut other = 0_f32;
-        let mut labels: Vec<&str> = Vec::new();
-
-        try!(writeln!(f, "{}", self.datetime));
-
-        // TODO: sort by count
-        for (ext, &count) in &self.extensions {
-            let value = count as f32 * step;
-
-            if value < 1_f32 || *ext == "none" {
-                other += value
-            } else {
-                for _ in 0..(value.ceil() as usize) {
-                    try!(write!(f, "{}", ARTS[pos % ARTS.len()]));
-                }
-                labels.push(&ext[..]);
-                pos += 1;
-            }
-        }
-
-        for _ in 0..(other.ceil() as usize) {
-            try!(write!(f, "{}", ARTS[pos % ARTS.len()]));
-        }
-
-        labels.push("other");
-
-        write!(f, "\n{:?}\n", labels)
     }
 }

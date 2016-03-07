@@ -4,6 +4,7 @@ use chrono;
 use chrono::offset::{fixed,utc,TimeZone};
 use std::collections::{BTreeMap,HashMap};
 use mailmap::Mailmap;
+use snapshot::Snapshot;
 use prettytable::Table;
 use std::error::Error;
 use std::ops::{Add,Sub};
@@ -27,12 +28,22 @@ impl<'repo> PersonalStats<'repo> {
             .calculate(self.repo, &commit)
     }
 
-    pub fn blame(&mut self, blame: &git2::Blame, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
-        for hunk in blame.iter() {
-            let name = try!(PersonalStats::mapped_name(&hunk.final_signature(), mailmap));
+    pub fn blame(&mut self, files: &Snapshot, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
+        let mut opts = git2::BlameOptions::new();
+        opts.track_copies_same_commit_moves(true)
+            .track_copies_same_commit_copies(true);
 
-            if let Some(entry) = self.authors.get_mut(&name) {
-                entry.num_lines += hunk.lines_in_hunk();
+        for (i, path) in files.iter().enumerate() {
+            print!("[{}/{}]\r", i+1, files.len());
+
+            let blame = try!(self.repo.blame_file(path, Some(&mut opts)));
+
+            for hunk in blame.iter() {
+                let name = try!(PersonalStats::mapped_name(&hunk.final_signature(), mailmap));
+
+                if let Some(entry) = self.authors.get_mut(&name) {
+                    entry.num_lines += hunk.lines_in_hunk();
+                }
             }
         }
 
@@ -53,9 +64,13 @@ impl<'repo> PersonalStats<'repo> {
 impl<'repo> fmt::Display for PersonalStats<'repo> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut table = Table::new();
-        table.add_row(row!["Author", "Commits (%)", "Insertions", "Deletions", "Lines", "Age in days", "Active days (%)"]);
+        table.add_row(row!["Author", "Commits (%)", "Insertions", "Deletions", "Owned lines (%)", "Live code", "Age in days", "Active days (%)"]);
 
         let total = self.authors.iter().fold(Stat::default(), |total, item| &total + item.1);
+        let total_days = total.num_days();
+        let total_active_days = total.activity_days.len();
+        let total_active_days_percent = total_active_days as f32 / total_days as f32 * 100_f32;
+        let total_live_code_percent = total.num_lines as f32 / total.insertions as f32 * 100_f32;
 
         for (name, stat) in &self.authors {
             let active_days = stat.activity_days.len();
@@ -63,6 +78,7 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
             let active_days_percent = active_days as f32 / all_days as f32 * 100_f32;
             let commit_percent = stat.num_commit as f32 / total.num_commit as f32 * 100_f32;
             let lines_percent = stat.num_lines as f32 / total.num_lines as f32 * 100_f32;
+            let live_code_percent = stat.num_lines as f32 / stat.insertions as f32 * 100_f32;
 
             table.add_row(row![
                           name,
@@ -70,20 +86,19 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
                           format!("{}", stat.insertions),
                           format!("{}", stat.deletions),
                           format!("{} ({:.2}%)", stat.num_lines, lines_percent),
+                          format!("{:.2}%", live_code_percent),
                           format!("{}", all_days),
                           format!("{} ({:.2}%)", active_days, active_days_percent)
             ]);
         }
 
-        let total_days = total.num_days();
-        let total_active_days = total.activity_days.len();
-        let total_active_days_percent = total_active_days as f32 / total_days as f32 * 100_f32;
         table.add_row(row![
                       "Total",
                       format!("{} (100%)", total.num_commit),
                       format!("{}", total.insertions),
                       format!("{}", total.deletions),
                       format!("{} (100%)", total.num_lines),
+                      format!("{:.2}%", total_live_code_percent),
                       format!("{}", total_days),
                       format!("{} ({:.2}%)", total_active_days, total_active_days_percent)
         ]);

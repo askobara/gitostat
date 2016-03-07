@@ -83,7 +83,6 @@ mod gitostat {
         let mut revwalk = try!(repo.revwalk());
         try!(revwalk.push_head());
         revwalk.set_sorting(git2::SORT_TOPOLOGICAL);
-        // let mutex = Mutex::new(repo);
 
         let commits: Vec<git2::Commit> = revwalk.filter_map(|oid| {
             // trying lookup commit in repo, skip if any error
@@ -105,7 +104,7 @@ mod gitostat {
             heatmap.append(&commit.author().when());
             try!(authors.append(&commit, mailmap));
 
-            let files = try!(Snapshot::new(&repo, &commit));
+            let files = try!(Snapshot::new(&repo, &commit, false));
             let key = format!("{}", files.datetime.format("%Y-%W"));
             let number = num_files.entry(key).or_insert(0);
             *number = cmp::max(*number, files.len());
@@ -113,12 +112,9 @@ mod gitostat {
         println!("");
 
         if let Some(commit) = commits.first() {
-            let files = try!(Snapshot::new(&repo, &commit));
-            for (i, path) in files.iter().enumerate() {
-                print!("[{}/{}]\r", i+1, files.len());
-                let blame = try!(repo.blame_file(&path, None));
-                try!(authors.blame(&blame, mailmap));
-            }
+            // skip binary files because they don't counted in diffs
+            let files = try!(Snapshot::new(repo, commit, true));
+            try!(authors.blame(&files, mailmap));
             println!("Scaned {}", files.len());
         }
 
