@@ -6,6 +6,7 @@ extern crate core;
 extern crate regex;
 #[macro_use]
 extern crate prettytable;
+#[cfg(test)] extern crate tempdir;
 
 use docopt::Docopt;
 
@@ -13,6 +14,7 @@ mod snapshot;
 mod heatmap;
 mod mailmap;
 mod personal;
+#[cfg(test)] mod test;
 
 #[derive(RustcDecodable)]
 pub struct Args {

@@ -78,3 +78,36 @@ impl<'repo> Snapshot<'repo> {
         self.files.iter()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs::{self, File};
+    use std::io::prelude::*;
+    use std::path::{Path,PathBuf};
+    use snapshot::Snapshot;
+
+    #[test]
+    fn smoke() {
+        let (_td, repo) = ::test::repo_init();
+        let mut index = repo.index().unwrap();
+
+        let root = repo.path().parent().unwrap();
+        fs::create_dir(&root.join("foo")).unwrap();
+        let mut file = File::create(&root.join("foo/bar")).unwrap();
+        file.write_all(b"Hello, world!").unwrap();
+        index.add_path(Path::new("foo/bar")).unwrap();
+
+        let id = index.write_tree().unwrap();
+        let tree = repo.find_tree(id).unwrap();
+        let sig = repo.signature().unwrap();
+        let id = repo.refname_to_id("HEAD").unwrap();
+        let parent = repo.find_commit(id).unwrap();
+        let id = repo.commit(Some("HEAD"), &sig, &sig, "commit",
+                             &tree, &[&parent]).unwrap();
+        let commit = repo.find_commit(id).unwrap();
+
+        let files = Snapshot::new(&repo, &commit, false).unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files.iter().next(), Some(&PathBuf::from("foo/bar")));
+    }
+}
