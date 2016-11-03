@@ -1,28 +1,22 @@
 use git2;
-use std::{path,slice,marker};
+use std::{path,slice};
 use chrono::offset::{fixed,utc,TimeZone};
 use chrono::datetime;
 
-pub struct Snapshot<'repo> {
+pub struct Snapshot {
     files: Vec<path::PathBuf>,
     pub datetime: datetime::DateTime<fixed::FixedOffset>,
-    _marker: marker::PhantomData<&'repo git2::Repository>,
 }
 
-/// Example:
-///
-/// ```
-/// let files = try!(Snapshot::new(&repo, &commit));
-/// for path in files.iter() {
-///     println!("{}", path.display());
-/// }
-/// ```
-impl<'repo> Snapshot<'repo> {
+pub trait HasSnapshot {
+    fn snapshot(&self, commit: &git2::Commit, no_binary: bool) -> Result<Snapshot, git2::Error>;
+}
 
-    pub fn new(repo: &'repo git2::Repository, commit: &git2::Commit, no_binary: bool) -> Result<Snapshot<'repo>, git2::Error> {
+impl HasSnapshot for git2::Repository {
+    fn snapshot(&self, commit: &git2::Commit, no_binary: bool) -> Result<Snapshot, git2::Error> {
         let mut files: Vec<path::PathBuf> = Vec::new();
 
-        let head = try!(repo.find_object(commit.tree_id(), Some(git2::ObjectType::Tree)));
+        let head = try!(commit.tree()).into_object();
         let mut trees = vec![(path::PathBuf::new(), head)];
 
         while let Some((path, object)) = trees.pop() {
@@ -32,7 +26,7 @@ impl<'repo> Snapshot<'repo> {
                     // other trees with resolved path will be added to the stack
                     Some(git2::ObjectType::Tree) => {
                         let name = entry.name().unwrap_or("<non-utf8 string>");
-                        let object = try!(entry.to_object(repo));
+                        let object = try!(entry.to_object(self));
                         trees.push((path.join(name), object));
                     },
                     // blob will be pushed to result vector
@@ -41,7 +35,7 @@ impl<'repo> Snapshot<'repo> {
                             let path = path.join(name);
 
                             let is_binary = if no_binary {
-                                let object = try!(entry.to_object(repo));
+                                let object = try!(entry.to_object(self));
                                 object.as_blob().unwrap().is_binary()
                             } else {
                                 false
@@ -65,10 +59,11 @@ impl<'repo> Snapshot<'repo> {
         Ok(Snapshot {
             files: files,
             datetime: datetime,
-            _marker: marker::PhantomData,
         })
     }
+}
 
+impl Snapshot {
     pub fn len(&self) -> usize {
         self.files.len()
     }
@@ -84,7 +79,7 @@ mod tests {
     use std::fs::{self, File};
     use std::io::prelude::*;
     use std::path::{Path,PathBuf};
-    use snapshot::Snapshot;
+    use snapshot::HasSnapshot;
 
     #[test]
     fn smoke() {
@@ -106,7 +101,7 @@ mod tests {
                              &tree, &[&parent]).unwrap();
         let commit = repo.find_commit(id).unwrap();
 
-        let files = Snapshot::new(&repo, &commit, false).unwrap();
+        let files = repo.snapshot(&commit, false).unwrap();
         assert_eq!(files.len(), 1);
         assert_eq!(files.iter().next(), Some(&PathBuf::from("foo/bar")));
     }

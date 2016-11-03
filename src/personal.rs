@@ -1,13 +1,13 @@
-use std::{fmt,ops,cmp,default};
+use std::{fmt,ops,cmp};
 use git2;
 use chrono;
 use chrono::offset::{fixed,utc,TimeZone};
 use std::collections::{BTreeMap,HashMap};
 use mailmap::Mailmap;
 use snapshot::Snapshot;
-use prettytable::Table;
+use prettytable::{Table, format};
 use std::error::Error;
-use std::ops::{Add,Sub};
+use std::ops::{Add,Sub,AddAssign};
 
 pub struct PersonalStats<'repo> {
     repo: &'repo git2::Repository,
@@ -22,10 +22,10 @@ impl<'repo> PersonalStats<'repo> {
     pub fn append(&mut self, commit: &git2::Commit, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
         let name = try!(PersonalStats::mapped_name(&commit.author(), mailmap));
 
-        self.authors
-            .entry(name)
-            .or_insert(Stat::new(&commit))
-            .calculate(self.repo, &commit)
+        let stat = try!(self.repo.stat(&commit));
+
+        *self.authors.entry(name).or_insert(Stat::new()) += stat;
+        Ok(())
     }
 
     pub fn blame(&mut self, files: &Snapshot, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
@@ -64,9 +64,19 @@ impl<'repo> PersonalStats<'repo> {
 impl<'repo> fmt::Display for PersonalStats<'repo> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut table = Table::new();
+        let format = format::FormatBuilder::new()
+                .column_separator('│')
+                .borders('│')
+                .separator(format::LinePosition::Top,    format::LineSeparator::new('─', '┬', '┌', '┐'))
+                .separator(format::LinePosition::Intern, format::LineSeparator::new('─', '┼', '├', '┤'))
+                .separator(format::LinePosition::Bottom, format::LineSeparator::new('─', '┴', '└', '┘'))
+                .padding(1, 1)
+                .build();
+
+        table.set_format(format);
         table.add_row(row!["Author", "Commits (%)", "Insertions", "Deletions", "Owned lines (%)", "Live code", "Age in days", "Active days (%)"]);
 
-        let total = self.authors.iter().fold(Stat::default(), |total, item| &total + item.1);
+        let total = self.authors.iter().fold(Stat::new(), |total, item| total + item.1);
         let total_days = total.num_days();
         let total_active_days = total.activity_days.len();
         let total_active_days_percent = total_active_days as f32 / total_days as f32 * 100_f32;
@@ -173,7 +183,7 @@ impl cmp::PartialEq for MiniCommit {
 impl cmp::Eq for MiniCommit { }
 
 #[derive(Debug)]
-struct Stat {
+pub struct Stat {
     num_commit: usize,
     num_lines: usize,
     insertions: usize,
@@ -186,9 +196,52 @@ struct Stat {
     first_commit: Option<MiniCommit>,
 }
 
+pub trait HasStat {
+    fn stat(&self, commit: &git2::Commit) -> Result<Stat, git2::Error>;
+}
+
+impl HasStat for git2::Repository {
+    fn stat(&self, commit: &git2::Commit) -> Result<Stat, git2::Error> {
+
+        let mini = MiniCommit::new(commit);
+        let tree = try!(commit.tree());
+
+        // avoid error on the initial commit
+        let ptree = if commit.parents().len() == 1 {
+            let parent = try!(commit.parent(0));
+            parent.tree().ok()
+        } else {
+            None
+        };
+
+        let diff = try!(self.diff_tree_to_tree(ptree.as_ref(), Some(&tree), None));
+        let stats = try!(diff.stats());
+
+        let mut activity_days = HashMap::new();
+        let day = format!("{}", mini.datetime.format("%Y-%m-%d"));
+        activity_days.insert(day, 1);
+
+        let mut activity_weeks = BTreeMap::new();
+        let week = format!("{}", mini.datetime.format("%Y-%W"));
+        activity_weeks.insert(week, 1);
+
+        Ok(Stat {
+            num_commit: 1,
+            num_lines: 0,
+            insertions: stats.insertions(),
+            deletions: stats.deletions(),
+
+            activity_days: activity_days,
+            activity_weeks: activity_weeks,
+            first_commit: Some(mini),
+            last_commit: Some(mini),
+        })
+    }
+}
+
 impl Stat {
     /// Create empty struct.
-    pub fn new(commit: &git2::Commit) -> Stat {
+    pub fn new() -> Stat {
         Stat {
             num_commit: 0,
             num_lines: 0,
@@ -196,46 +249,9 @@ impl Stat {
             deletions: 0,
             activity_days: HashMap::new(),
             activity_weeks: BTreeMap::new(),
-            first_commit: Some(MiniCommit::new(commit)),
-            last_commit: Some(MiniCommit::new(commit)),
+            first_commit: None,
+            last_commit: None,
         }
-    }
-
-    /// Gets diff and save it for current stats.
-    pub fn calculate(&mut self, repo: &git2::Repository, commit: &git2::Commit) -> Result<(), git2::Error> {
-        let mini = MiniCommit::new(commit);
-        let tree = try!(commit.tree());
-
-        // avoid error on the initial commit
-        let ptree = if commit.parents().len() == 1 {
-            let parent = try!(commit.parent(0));
-            Some(try!(parent.tree()))
-        } else {
-            None
-        };
-
-        let diff = try!(git2::Diff::tree_to_tree(repo, ptree.as_ref(), Some(&tree), None));
-        let stats = try!(diff.stats());
-
-        // counting active days
-        let day = format!("{}", mini.datetime.format("%Y-%m-%d"));
-        *self.activity_days.entry(day).or_insert(0) += 1;
-
-        // counting active weeks
-        let week = format!("{}", mini.datetime.format("%Y-%W"));
-        *self.activity_weeks.entry(week).or_insert(0) += 1;
-
-        self.num_commit += 1;
-        self.insertions += stats.insertions();
-        self.deletions += stats.deletions();
-
-        // commits can be in topological order
-        // so, we should ensure that first_commit is oldest
-        // and last_commit is newest
-        self.first_commit = if self.first_commit.is_none() { Some(mini) } else { cmp::min(self.first_commit, Some(mini)) };
-        self.last_commit =  cmp::max(self.last_commit, Some(mini));
-
-        Ok(())
     }
 
     /// Returns number of days between first and last commits.
@@ -247,21 +263,6 @@ impl Stat {
     }
 }
 
-
-impl default::Default for Stat {
-    fn default() -> Stat {
-        Stat {
-            num_commit: 0,
-            num_lines: 0,
-            insertions: 0,
-            deletions: 0,
-            activity_days: HashMap::new(),
-            activity_weeks: BTreeMap::new(),
-            first_commit: None,
-            last_commit: None
-        }
-    }
-}
 
 fn merge_hashmaps(lhs: &HashMap<String, usize>, rhs: &HashMap<String, usize>) -> HashMap<String, usize> {
     let mut result = lhs.clone();
@@ -281,10 +282,10 @@ fn merge_btreemaps(lhs: &BTreeMap<String, usize>, rhs: &BTreeMap<String, usize>)
     result
 }
 
-impl<'a, 'b> ops::Add<&'b Stat> for &'a Stat {
+impl<'a> ops::Add<&'a Stat> for Stat {
     type Output = Stat;
 
-    fn add(self, rhs: &'b Stat) -> Stat {
+    fn add(self, rhs: &'a Stat) -> Stat {
         Stat {
             num_commit: self.num_commit + rhs.num_commit,
             num_lines: self.num_lines + rhs.num_lines,
@@ -296,5 +297,28 @@ impl<'a, 'b> ops::Add<&'b Stat> for &'a Stat {
             first_commit: if self.first_commit.is_none() { rhs.first_commit } else { cmp::min(self.first_commit, rhs.first_commit) },
             last_commit: cmp::max(self.last_commit, rhs.last_commit)
         }
+    }
+}
+
+impl AddAssign for Stat {
+    fn add_assign(&mut self, rhs: Stat) {
+        self.num_commit += rhs.num_commit;
+        self.num_lines += rhs.num_lines;
+        self.insertions += rhs.insertions;
+        self.deletions += rhs.deletions;
+        for (key, value) in &rhs.activity_days {
+            *self.activity_days.entry(key.clone()).or_insert(0) += *value;
+        }
+        for (key, value) in &rhs.activity_weeks {
+            *self.activity_weeks.entry(key.clone()).or_insert(0) += *value;
+        }
+        // because None is smaller than other.datetime
+        self.first_commit = if self.first_commit.is_none() {
+            rhs.first_commit
+        } else {
+            cmp::min(self.first_commit, rhs.first_commit)
+        };
+
+        self.last_commit = cmp::max(self.last_commit, rhs.last_commit);
     }
 }

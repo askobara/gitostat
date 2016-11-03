@@ -67,7 +67,7 @@ mod gitostat {
     use std::collections::BTreeMap;
     use Args;
 
-    use snapshot::Snapshot;
+    use snapshot::HasSnapshot;
     use heatmap::Heatmap;
     use mailmap::Mailmap;
     use personal::PersonalStats;
@@ -88,7 +88,7 @@ mod gitostat {
 
         let commits: Vec<git2::Commit> = revwalk.filter_map(|oid| {
             // trying lookup commit in repo, skip if any error
-            let commit = otry!(repo.find_commit(oid));
+            let commit = otry!(repo.find_commit(otry!(oid)));
             // also skip merge-commits
             if commit.parents().len() > 1 { return None; }
 
@@ -106,7 +106,7 @@ mod gitostat {
             heatmap.append(&commit.author().when());
             try!(authors.append(&commit, mailmap));
 
-            let files = try!(Snapshot::new(&repo, &commit, false));
+            let files = try!(repo.snapshot(&commit, false));
             let key = format!("{}", files.datetime.format("%Y-%W"));
             let number = num_files.entry(key).or_insert(0);
             *number = cmp::max(*number, files.len());
@@ -115,7 +115,7 @@ mod gitostat {
 
         if let Some(commit) = commits.first() {
             // skip binary files because they don't counted in diffs
-            let files = try!(Snapshot::new(repo, commit, true));
+            let files = try!(repo.snapshot(commit, true));
             try!(authors.blame(&files, mailmap));
             println!("Scaned {}", files.len());
         }
