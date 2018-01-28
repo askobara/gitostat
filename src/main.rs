@@ -1,7 +1,8 @@
 extern crate git2;
 extern crate chrono;
+#[macro_use]
+extern crate serde_derive;
 extern crate docopt;
-extern crate rustc_serialize;
 extern crate core;
 extern crate regex;
 #[macro_use]
@@ -16,7 +17,7 @@ mod mailmap;
 mod personal;
 #[cfg(test)] mod test;
 
-#[derive(RustcDecodable)]
+#[derive(Debug, Deserialize)]
 pub struct Args {
     arg_path: String
 }
@@ -29,7 +30,7 @@ Options:
 -h, --help show this message
 ";
     let args: Args = Docopt::new(USAGE)
-        .and_then(|d| d.decode())
+        .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
 
     match gitostat::run(&args) {

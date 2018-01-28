@@ -14,6 +14,13 @@ macro_rules! ostring {
     })
 }
 
+macro_rules! matchtostring {
+    ($e:expr) => (match $e {
+        Some(m) => Some(String::from(m.as_str())),
+        None => None
+    })
+}
+
 struct Author {
     name: Option<String>,
     email: Option<String>,
@@ -96,10 +103,10 @@ impl Mailmap {
             if line.chars().nth(0) == Some('#') { continue; }
 
             if let Some(caps) = re.captures(&line[..]) {
-                let mut old_email = ostring!(caps.name("old_email"));
-                let old_name  = ostring!(caps.name("old_name"));
-                let mut new_email = ostring!(caps.name("new_email"));
-                let new_name  = ostring!(caps.name("new_name"));
+                let mut old_email = matchtostring!(caps.name("old_email"));
+                let old_name = matchtostring!(caps.name("old_name"));
+                let mut new_email = matchtostring!(caps.name("new_email"));
+                let new_name = matchtostring!(caps.name("new_name"));
 
                 if old_email.is_none() {
                     old_email = new_email.clone();

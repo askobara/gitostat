@@ -1,6 +1,6 @@
 use std::{fmt, cmp};
-use chrono::offset::{fixed,utc,TimeZone};
-use chrono::{Datelike,Timelike};
+use chrono::offset::{FixedOffset, Utc, TimeZone};
+use chrono::{Datelike, Timelike};
 use git2;
 
 pub struct Heatmap {
@@ -14,8 +14,8 @@ impl Heatmap {
 
     pub fn append(&mut self, time: &git2::Time) {
 
-        let timestamp = utc::UTC.timestamp(time.seconds(), 0)
-            .with_timezone(&fixed::FixedOffset::east(time.offset_minutes() * 60));
+        let timestamp = Utc.timestamp(time.seconds(), 0)
+            .with_timezone(&FixedOffset::east(time.offset_minutes() * 60));
 
         let day = timestamp.weekday().num_days_from_monday();
         let hour = timestamp.hour();

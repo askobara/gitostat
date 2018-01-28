@@ -1,11 +1,11 @@
 use git2;
 use std::{path,slice};
-use chrono::offset::{fixed,utc,TimeZone};
-use chrono::datetime;
+use chrono::offset::{FixedOffset, Utc, TimeZone};
+use chrono::DateTime;
 
 pub struct Snapshot {
     files: Vec<path::PathBuf>,
-    pub datetime: datetime::DateTime<fixed::FixedOffset>,
+    pub datetime: DateTime<FixedOffset>,
 }
 
 pub trait HasSnapshot {
@@ -53,8 +53,8 @@ impl HasSnapshot for git2::Repository {
         }
 
         let time = commit.author().when();
-        let tz = fixed::FixedOffset::east(time.offset_minutes() * 60);
-        let datetime = utc::UTC.timestamp(time.seconds(), 0).with_timezone(&tz);
+        let tz = FixedOffset::east(time.offset_minutes() * 60);
+        let datetime = Utc.timestamp(time.seconds(), 0).with_timezone(&tz);
 
         Ok(Snapshot {
             files: files,

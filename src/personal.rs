@@ -1,13 +1,13 @@
 use std::{fmt,ops,cmp};
+use std::error::Error;
+use std::ops::{Add, AddAssign};
+use std::collections::{BTreeMap, HashMap};
 use git2;
 use chrono;
-use chrono::offset::{fixed,utc,TimeZone};
-use std::collections::{BTreeMap,HashMap};
+use chrono::offset::{FixedOffset, Utc, Local, TimeZone};
 use mailmap::Mailmap;
 use snapshot::Snapshot;
 use prettytable::{Table, format};
-use std::error::Error;
-use std::ops::{Add,Sub,AddAssign};
 
 pub struct PersonalStats<'repo> {
     repo: &'repo git2::Repository,
@@ -125,13 +125,13 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
             1f32
         };
 
-        let now = chrono::offset::local::Local::now();
+        let now = Local::now();
         let start = total.first_commit.clone().unwrap();
-        let num_weeks = now.sub(start.datetime).num_weeks();
+        let num_weeks = now.signed_duration_since(start.datetime).num_weeks();
 
         try!(writeln!(f, "Activity by weeks:"));
         for i in 0..num_weeks {
-            let step = start.datetime.add(chrono::duration::Duration::weeks(i));
+            let step = start.datetime.add(chrono::Duration::weeks(i));
             let key = format!("{}", step.format("%Y-%W"));
             let val = *total.activity_weeks.get(&key).unwrap_or(&0);
             let value = (val as f32 * coeff).round() as usize;
@@ -147,17 +147,17 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
 #[derive(Copy, Clone, Debug)]
 struct MiniCommit {
     id: git2::Oid,
-    datetime: chrono::datetime::DateTime<chrono::offset::fixed::FixedOffset>,
+    datetime: chrono::DateTime<FixedOffset>,
 }
 
 impl MiniCommit {
     pub fn new(commit: &git2::Commit) -> MiniCommit {
         let time = commit.author().when();
-        let tz = fixed::FixedOffset::east(time.offset_minutes() * 60);
+        let tz = FixedOffset::east(time.offset_minutes() * 60);
 
         MiniCommit {
             id: commit.id(),
-            datetime: utc::UTC.timestamp(time.seconds(), 0).with_timezone(&tz),
+            datetime: Utc.timestamp(time.seconds(), 0).with_timezone(&tz),
         }
     }
 }
@@ -259,7 +259,7 @@ impl Stat {
         let first = self.first_commit.clone().unwrap();
         let last = self.last_commit.clone().unwrap();
 
-        (last.datetime - first.datetime).num_days()
+        last.datetime.signed_duration_since(first.datetime).num_days()
     }
 }
 
