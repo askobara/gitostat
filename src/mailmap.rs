@@ -113,7 +113,7 @@ impl Mailmap {
                     new_email = None;
                 }
 
-                let mut me = authors.entry(old_email.unwrap()).or_insert(Author::default());
+                let me = authors.entry(old_email.unwrap()).or_insert(Author::default());
 
                 if let Some(name) = old_name {
                     me.namemap_insert(name, Author::new(new_name, new_email));

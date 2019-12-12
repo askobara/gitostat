@@ -20,9 +20,9 @@ impl<'repo> PersonalStats<'repo> {
     }
 
     pub fn append(&mut self, commit: &git2::Commit, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
-        let name = try!(PersonalStats::mapped_name(&commit.author(), mailmap));
+        let name = PersonalStats::mapped_name(&commit.author(), mailmap)?;
 
-        let stat = try!(self.repo.stat(&commit));
+        let stat = self.repo.stat(&commit)?;
 
         *self.authors.entry(name).or_insert(Stat::new()) += stat;
         Ok(())
@@ -36,10 +36,10 @@ impl<'repo> PersonalStats<'repo> {
         for (i, path) in files.iter().enumerate() {
             print!("[{}/{}]\r", i+1, files.len());
 
-            let blame = try!(self.repo.blame_file(path, Some(&mut opts)));
+            let blame = self.repo.blame_file(path, Some(&mut opts))?;
 
             for hunk in blame.iter() {
-                let name = try!(PersonalStats::mapped_name(&hunk.final_signature(), mailmap));
+                let name = PersonalStats::mapped_name(&hunk.final_signature(), mailmap)?;
 
                 if let Some(entry) = self.authors.get_mut(&name) {
                     entry.num_lines += hunk.lines_in_hunk();
@@ -129,16 +129,16 @@ impl<'repo> fmt::Display for PersonalStats<'repo> {
         let start = total.first_commit.clone().unwrap();
         let num_weeks = now.signed_duration_since(start.datetime).num_weeks();
 
-        try!(writeln!(f, "Activity by weeks:"));
+        writeln!(f, "Activity by weeks:")?;
         for i in 0..num_weeks {
             let step = start.datetime.add(chrono::Duration::weeks(i));
             let key = format!("{}", step.format("%Y-%W"));
             let val = *total.activity_weeks.get(&key).unwrap_or(&0);
             let value = (val as f32 * coeff).round() as usize;
             let bar = (0..value).map(|_| "░").collect::<String>();
-            try!(writeln!(f, "{} {:3} {}", key, val, bar + "▏"));
+            writeln!(f, "{} {:3} {}", key, val, bar + "▏")?;
         }
-        try!(writeln!(f, ""));
+        writeln!(f, "")?;
 
         write!(f, "{}", table)
     }
@@ -204,18 +204,18 @@ impl HasStat for git2::Repository {
     fn stat(&self, commit: &git2::Commit) -> Result<Stat, git2::Error> {
 
         let mini = MiniCommit::new(commit);
-        let tree = try!(commit.tree());
+        let tree = commit.tree()?;
 
         // avoid error on the initial commit
         let ptree = if commit.parents().len() == 1 {
-            let parent = try!(commit.parent(0));
+            let parent = commit.parent(0)?;
             parent.tree().ok()
         } else {
             None
         };
 
-        let diff = try!(self.diff_tree_to_tree(ptree.as_ref(), Some(&tree), None));
-        let stats = try!(diff.stats());
+        let diff = self.diff_tree_to_tree(ptree.as_ref(), Some(&tree), None)?;
+        let stats = diff.stats()?;
 
         let mut activity_days = HashMap::new();
         let day = format!("{}", mini.datetime.format("%Y-%m-%d"));

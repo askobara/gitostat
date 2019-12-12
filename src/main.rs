@@ -75,7 +75,7 @@ mod gitostat {
 
     pub fn run(args: &Args) -> Result<(), git2::Error> {
         let path = Path::new(&args.arg_path);
-        let repo = try!(git2::Repository::open(path));
+        let repo = git2::Repository::open(path)?;
 
         let mailmap = Mailmap::new(&path.join(".mailmap"));
 
@@ -83,8 +83,8 @@ mod gitostat {
     }
 
     fn info(repo: &git2::Repository, mailmap: Option<&Mailmap>) -> Result<(), git2::Error> {
-        let mut revwalk = try!(repo.revwalk());
-        try!(revwalk.push_head());
+        let mut revwalk = repo.revwalk()?;
+        revwalk.push_head()?;
         revwalk.set_sorting(git2::SORT_TOPOLOGICAL);
 
         let commits: Vec<git2::Commit> = revwalk.filter_map(|oid| {
@@ -105,9 +105,9 @@ mod gitostat {
             print!("[{}/{}]\r", i+1, commits.len());
 
             heatmap.append(&commit.author().when());
-            try!(authors.append(&commit, mailmap));
+            authors.append(&commit, mailmap)?;
 
-            let files = try!(repo.snapshot(&commit, false));
+            let files = repo.snapshot(&commit, false)?;
             let key = format!("{}", files.datetime.format("%Y-%W"));
             let number = num_files.entry(key).or_insert(0);
             *number = cmp::max(*number, files.len());
@@ -116,8 +116,8 @@ mod gitostat {
 
         if let Some(commit) = commits.first() {
             // skip binary files because they don't counted in diffs
-            let files = try!(repo.snapshot(commit, true));
-            try!(authors.blame(&files, mailmap));
+            let files = repo.snapshot(commit, true)?;
+            authors.blame(&files, mailmap)?;
             println!("Scaned {}", files.len());
         }
 

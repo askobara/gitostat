@@ -34,18 +34,18 @@ impl fmt::Display for Heatmap {
         const ARTS: [char; 5] = ['.', '▪', '◾', '◼', '⬛'];
         const DAYS: [&'static str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-        try!(write!(f, "     "));
+        write!(f, "     ")?;
         for i in 0..24 {
-            try!(write!(f, "{:3}", i));
+            write!(f, "{:3}", i)?;
         }
-        try!(write!(f, "\n"));
+        write!(f, "\n")?;
 
         for day in 0..7 {
-            try!(write!(f, "{}: ", DAYS[day]));
+            write!(f, "{}: ", DAYS[day])?;
             for hour in 0..24 {
-                try!(write!(f, "{: >3}", ARTS[(self.array[day * 24 + hour] as f32 / max as f32 * (ARTS.len() - 1) as f32) as usize]));
+                write!(f, "{: >3}", ARTS[(self.array[day * 24 + hour] as f32 / max as f32 * (ARTS.len() - 1) as f32) as usize])?;
             }
-            try!(write!(f, "\n"));
+            write!(f, "\n")?;
         }
 
         Ok(())

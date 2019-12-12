@@ -16,7 +16,7 @@ impl HasSnapshot for git2::Repository {
     fn snapshot(&self, commit: &git2::Commit, no_binary: bool) -> Result<Snapshot, git2::Error> {
         let mut files: Vec<path::PathBuf> = Vec::new();
 
-        let head = try!(commit.tree()).into_object();
+        let head = commit.tree()?.into_object();
         let mut trees = vec![(path::PathBuf::new(), head)];
 
         while let Some((path, object)) = trees.pop() {
@@ -26,7 +26,7 @@ impl HasSnapshot for git2::Repository {
                     // other trees with resolved path will be added to the stack
                     Some(git2::ObjectType::Tree) => {
                         let name = entry.name().unwrap_or("<non-utf8 string>");
-                        let object = try!(entry.to_object(self));
+                        let object = entry.to_object(self)?;
                         trees.push((path.join(name), object));
                     },
                     // blob will be pushed to result vector
@@ -35,7 +35,7 @@ impl HasSnapshot for git2::Repository {
                             let path = path.join(name);
 
                             let is_binary = if no_binary {
-                                let object = try!(entry.to_object(self));
+                                let object = entry.to_object(self)?;
                                 object.as_blob().unwrap().is_binary()
                             } else {
                                 false
